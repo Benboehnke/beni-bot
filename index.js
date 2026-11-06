@@ -1,3 +1,13 @@
+const http = require('http');
+const PORT = process.env.PORT || 3000;
+
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Bot laeuft!');
+}).listen(PORT, () => {
+  console.log('Webserver laeuft auf Port ' + PORT);
+});
+
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 
 const client = new Client({
