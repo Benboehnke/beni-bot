@@ -165,3 +165,55 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(process.env.TOKEN);
+
+// --- !unban ---
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.content.startsWith('!unban')) return;
+
+  // Dein Command nach 3 Sek löschen
+  setTimeout(() => message.delete().catch(()=>{}), 3000);
+
+  const args = message.content.split(' ');
+  const userId = args[1]?.replace(/[<@!>]/g, '');
+
+  if (!message.member.permissions.has('BanMembers')) {
+    return message.reply('Du hast keine Rechte dazu!').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  }
+  if (!userId) {
+    return message.reply('Benutzung: `!unban <User-ID>`').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  }
+
+  try {
+    await message.guild.bans.remove(userId);
+    message.reply(`User wurde entbannt!`).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  } catch (e) {
+    message.reply('User nicht gefunden oder nicht gebannt!').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  }
+});
+
+// --- !unmute ---
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.content.startsWith('!unmute')) return;
+
+  // Dein Command nach 3 Sek löschen
+  setTimeout(() => message.delete().catch(()=>{}), 3000);
+
+  const target = message.mentions.members.first();
+
+  if (!message.member.permissions.has('ModerateMembers')) {
+    return message.reply('Du hast keine Rechte dazu!').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  }
+  if (!target) {
+    return message.reply('Benutzung: `!unmute @User`').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  }
+
+  try {
+    await target.timeout(null);
+    await target.send('Du wurdest entmutet!').catch(()=>{});
+    message.reply(`${target} wurde entmutet!`).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  } catch (e) {
+    message.reply('Konnte den User nicht entmuten!').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  }
+});
