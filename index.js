@@ -250,3 +250,57 @@ client.on('messageCreate', async (message) => {
 
   message.channel.send({ embeds: [embed], components: [row] });
 });
+
+// --- !ping als Embed ---
+const { EmbedBuilder } = require('discord.js');
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (message.content !== '!ping') return;
+
+  setTimeout(() => message.delete().catch(()=>{}), 3000);
+
+  const embed = new EmbedBuilder()
+    .setTitle('🏓 Pong!')
+    .setDescription('Use `!help` to get more Information')
+    .setColor(0x00FF00)
+    .setFooter({ text: 'Beni Bot • Online!' });
+
+  message.reply({ embeds: [embed] }).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+});
+
+// --- !hallo ---
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (message.content !== '!hallo') return;
+
+  setTimeout(() => message.delete().catch(()=>{}), 3000);
+  message.reply('Wie gehts! 👋').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+});
+
+// --- !sagtext ---
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.content.startsWith('!sagtext')) return;
+
+  setTimeout(() => message.delete().catch(()=>{}), 3000);
+
+  const text = message.content.slice(8).trim();
+
+  // Wenn du nur !sagtext schreibst, sagt er was Lustiges
+  const sprueche = [
+    'Beni ist der beste Bot auf diesem Server! 🔥',
+    'Wer !help nicht kennt, verpasst was! 😎',
+    'Ich bin schneller als dein WLAN! ⚡',
+    'Glaubst du an Liebe auf den ersten Ping? 🏓',
+    'Heute ist ein guter Tag um zu grinden! 🎮'
+  ];
+
+  if (!text) {
+    const zufall = sprueche[Math.floor(Math.random() * sprueche.length)];
+    return message.channel.send(zufall).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  }
+
+  // Wenn du Text dazu schreibst, sagt er den nach
+  message.channel.send(text).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+});
