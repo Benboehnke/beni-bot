@@ -300,4 +300,9 @@ client.on('messageCreate', async (message) => {
   message.reply({ embeds: [embed] });
 });
 
-client.login(process.env.TOKEN);
+console.log('Token da?', !!process.env.TOKEN, 'Länge:', process.env.TOKEN?.length);
+client.login(process.env.TOKEN).then(() => {
+  console.log('LOGIN VERSUCH GESTARTET');
+}).catch(e => {
+  console.log('LOGIN FEHLER:', e.message);
+});
