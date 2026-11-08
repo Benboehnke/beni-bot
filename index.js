@@ -256,15 +256,13 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.content !== '!ping') return;
 
-  setTimeout(() => message.delete().catch(()=>{}), 3000);
-
   const embed = new EmbedBuilder()
     .setTitle('🏓 Pong!')
     .setDescription('Benutze `!help` für mehr Informationen')
     .setColor(0x00FF00)
     .setFooter({ text: 'Beni Bot • Online!' });
 
-  message.reply({ embeds: [embed] }).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  message.reply({ embeds: [embed] });
 });
 
 // --- !hallo ---
@@ -272,8 +270,7 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.content !== '!hallo') return;
 
-  setTimeout(() => message.delete().catch(()=>{}), 3000);
-  message.reply('Wie gehts! 👋').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  message.reply('Wie gehts! 👋');
 });
 
 // --- !sag Text ---
@@ -281,13 +278,32 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith('!sag')) return;
 
-  setTimeout(() => message.delete().catch(()=>{}), 3000);
-
   const text = message.content.slice(4).trim();
 
   if (!text) {
-    return message.reply('Schreib so: `!sag Hallo Leute`').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+    return message.reply('Schreib so: `!sag Hallo Leute`');
   }
 
-  message.channel.send(text).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+  message.delete().catch(()=>{});
+  message.channel.send(text);
+});
+
+// --- !owner ---
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (message.content !== '!owner') return;
+
+  const embed = new EmbedBuilder()
+    .setTitle('👑 DER ERSTELLER VON BENI BOT')
+    .setDescription('**Elyias**')
+    .setColor(0xFFD700)
+    .addFields(
+      { name: '👤 Name', value: 'Elyias', inline: true },
+      { name: '🤖 Was kann er?', value: 'Er kann Bots erstellen!', inline: true },
+      { name: '🛡️ Moderator', value: 'Er ist ein guter Moderator!', inline: false },
+      { name: '💡 Fun Fact', value: 'Ohne Elyias gäbe es Beni Bot nicht!', inline: false }
+    )
+    .setFooter({ text: 'Beni Bot • Made by Elyias' });
+
+  message.reply({ embeds: [embed] });
 });
