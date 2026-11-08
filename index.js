@@ -217,3 +217,36 @@ client.on('messageCreate', async (message) => {
     message.reply('Konnte den User nicht entmuten!').then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
   }
 });
+
+// --- !help mit Button ---
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (message.content !== '!help') return;
+
+  setTimeout(() => message.delete().catch(()=>{}), 3000);
+
+  const embed = new EmbedBuilder()
+    .setTitle('📢 BENI BOT - ALLE COMMANDS')
+    .setColor(0x00FF00)
+    .setDescription('Hier sind alle Befehle, die du benutzen kannst:')
+    .addFields(
+      { name: '👮 MODERATION', value: '`!ban @User Grund`\n`!unban @User Grund`\n`!kick @User Grund`\n`!mute @User Zeit Grund`\n`!unmute @User`\n`!clear Zahl`', inline: false },
+      { name: '💬 NACHRICHTEN', value: '`!sendmessage #Channel Text`\n`!dm @User Text`', inline: false },
+      { name: '🔒 CHANNEL', value: '`!lock`\n`!unlock`', inline: false },
+      { name: '✅ SONSTIGES', value: '`!ping`\n`!hallo`\n`!sag Text`\n`!help`', inline: false },
+      { name: '⏰ MUTE ZEITEN', value: '`10s` = Sekunden, `10m` = Minuten, `1h` = Stunden, `1d` = Tage', inline: false }
+    )
+    .setFooter({ text: 'Beni Bot • Alle Commands löschen sich nach 3 Sek' });
+
+  const row = new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setLabel('🚀 Join unseren Discord!')
+        .setStyle(ButtonStyle.Link)
+        .setURL('https://discord.gg/7gqzytC3SH')
+    );
+
+  message.channel.send({ embeds: [embed], components: [row] });
+});
