@@ -1,24 +1,4 @@
 const http = require('http');
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } = require('discord.js');
-
-const PORT = process.env.PORT || 3000;
-
-// Webserver für Render
-http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end('Beni Bot is alive!');
-}).listen(PORT, () => {
-  console.log('Webserver läuft auf Port ' + PORT);
-});
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
-  ]
-});
 
 client.once('ready', () => {
   console.log(`Eingeloggt als ${client.user.tag}`);
@@ -53,6 +33,7 @@ client.on('messageCreate', async (message) => {
     const reason = args.slice(1).join(' ') || 'Kein Grund angegeben';
     if (!user.bannable) return replyAndDelete(message, 'Den kann ich leider nicht bannen, der steht über mir!');
 
+    // DM an den Gebannten
     try {
       await user.send(`Du wurdest vom Server **${message.guild.name}** gebannt!\n\n**Grund:** ${reason}\n**Gebannt von:** ${message.author.tag}\n\nTja, das war's leider. Wenn du denkst, das war ein Fehler, melde dich beim Team!`);
     } catch {}
@@ -105,6 +86,7 @@ client.on('messageCreate', async (message) => {
 
     const reason = args.slice(2).join(' ') || 'Kein Grund angegeben';
 
+    // DM an den Gemuteten
     try {
       await user.send(`Du wurdest auf dem Server **${message.guild.name}** gemutet!\n\n**Dauer:** ${durationStr}\n**Grund:** ${reason}\n**Gemutet von:** ${message.author.tag}\n\nErstmal kurz durchatmen und chillen, danach darfst du wieder schreiben!`);
     } catch {}
@@ -162,11 +144,14 @@ client.on('messageCreate', async (message) => {
   }
 });
 
+client.login(process.env.TOKEN);
+
 // --- !unban ---
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith('!unban')) return;
 
+  // Dein Command nach 3 Sek löschen
   setTimeout(() => message.delete().catch(()=>{}), 3000);
 
   const args = message.content.split(' ');
@@ -192,6 +177,7 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith('!unmute')) return;
 
+  // Dein Command nach 3 Sek löschen
   setTimeout(() => message.delete().catch(()=>{}), 3000);
 
   const target = message.mentions.members.first();
@@ -213,6 +199,8 @@ client.on('messageCreate', async (message) => {
 });
 
 // --- !help mit Button ---
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.content !== '!help') return;
@@ -298,11 +286,4 @@ client.on('messageCreate', async (message) => {
     .setFooter({ text: 'Beni Bot • Made by Elyias' });
 
   message.reply({ embeds: [embed] });
-});
-
-console.log('Token da?', !!process.env.TOKEN, 'Länge:', process.env.TOKEN?.length);
-client.login(process.env.TOKEN).then(() => {
-  console.log('LOGIN VERSUCH GESTARTET');
-}).catch(e => {
-  console.log('LOGIN FEHLER:', e.message);
 });
