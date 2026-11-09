@@ -374,3 +374,11 @@ client.login(MYTOKEN)
     console.log('LOGIN FEHLER:', e.message);
     console.log('GANZER FEHLER:', e);
   });
+
+console.log('Teste Discord Verbindung per HTTPS...');
+fetch('https://discord.com/api/v10/users/@me', {
+  headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` }
+}).then(async r => {
+  console.log('HTTPS TEST Status:', r.status);
+  console.log('HTTPS TEST Antwort:', (await r.text()).slice(0, 200));
+}).catch(e => console.log('HTTPS TEST FEHLER:', e.message));
