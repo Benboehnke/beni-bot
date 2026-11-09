@@ -256,3 +256,100 @@ client.login(process.env.TOKEN).then(() => {
 }).catch(e => {
   console.log('LOGIN FEHLER:', e.message);
 });
+
+// ===== WELCOME MESSAGE SYSTEM =====
+const { EmbedBuilder } = require('discord.js');
+
+// Speichert pro Server, in welchem Channel die Welcome Message an ist
+// guildId -> channelId
+const welcomeChannels = new Map();
+
+// Wenn jemand !enableWM oder !disableWM schreibt
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.guild) return;
+
+  const args = message.content.split(' ');
+  const command = args[0].toLowerCase();
+
+  // Nur !enableWM und !disableWM interessieren uns hier
+  if (command !== '!enablewm' && command !== '!disablewm') return;
+
+  // Command nach 3 Sekunden löschen
+  setTimeout(() => {
+    message.delete().catch(() => {});
+  }, 3000);
+
+  // Braucht Manage Channels / Admin Recht
+  if (!message.member.permissions.has('ManageChannels')) {
+    const noPerm = new EmbedBuilder()
+      .setColor(0xFF0000)
+      .setTitle('❌ Keine Berechtigung')
+      .setDescription('Du brauchst **Kanäle verwalten**, um das zu machen!')
+      .setTimestamp();
+    message.channel.send({ embeds: [noPerm] }).then(m => setTimeout(() => m.delete().catch(()=>{}), 5000));
+    return;
+  }
+
+  // Channel aus der Nachricht holen: #channel oder ID
+  const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]);
+
+  if (command === '!enablewm') {
+    if (!channel) {
+      const err = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Kein Channel angegeben!')
+        .setDescription('Benutze: `!enableWM #channel`')
+        .setTimestamp();
+      message.channel.send({ embeds: [err] });
+      return;
+    }
+
+    welcomeChannels.set(message.guild.id, channel.id);
+
+    const onEmbed = new EmbedBuilder()
+      .setColor(0x00C853)
+      .setTitle('✅ Welcome Message AN!')
+      .setDescription(`Neue Mitglieder werden jetzt in ${channel} begrüßt!`)
+      .addFields(
+        { name: '📍 Channel', value: `${channel}`, inline: true },
+        { name: '👋 Nachricht', value: 'Willkommen @user zu *Servername*!', inline: true }
+      )
+      .setFooter({ text: `Aktiviert von ${message.author.tag}` })
+      .setTimestamp();
+    message.channel.send({ embeds: [onEmbed] });
+  }
+
+  if (command === '!disablewm') {
+    if (!welcomeChannels.has(message.guild.id)) {
+      const err = new EmbedBuilder()
+        .setColor(0xFFAA00)
+        .setTitle('⚠️ War schon aus!')
+        .setDescription('Welcome Message war für diesen Server schon aus.')
+        .setTimestamp();
+      message.channel.send({ embeds: [err] });
+      return;
+    }
+
+    welcomeChannels.delete(message.guild.id);
+
+    const offEmbed = new EmbedBuilder()
+      .setColor(0xFF0000)
+      .setTitle('❌ Welcome Message AUS!')
+      .setDescription('Neue Mitglieder werden nicht mehr begrüßt.')
+      .setFooter({ text: `Deaktiviert von ${message.author.tag}` })
+      .setTimestamp();
+    message.channel.send({ embeds: [offEmbed] });
+  }
+});
+
+// Wenn ein neues Mitglied joint
+client.on('guildMemberAdd', async (member) => {
+  const channelId = welcomeChannels.get(member.guild.id);
+  if (!channelId) return;
+
+  const channel = member.guild.channels.cache.get(channelId);
+  if (!channel) return;
+
+  channel.send(`Willkommen ${member} zu **${member.guild.name}**!`);
+});
