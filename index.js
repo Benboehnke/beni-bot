@@ -258,7 +258,7 @@ client.login(process.env.TOKEN).then(() => {
 });
 
 // ===== WELCOME MESSAGE SYSTEM =====
-const { EmbedBuilder } = require('discord.js');
+
 
 // Speichert pro Server, in welchem Channel die Welcome Message an ist
 // guildId -> channelId
