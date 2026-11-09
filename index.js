@@ -1,6 +1,8 @@
 const { Client, GatewayIntentBits, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const http = require('http');
 
+console.log('Bot startet...');
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -10,6 +12,12 @@ const client = new Client({
   ]
 });
 
+// Fehler abfangen, damit der Bot nicht lautlos abstürzt
+client.on('error', (e) => console.log('DISCORD CLIENT FEHLER:', e.message));
+client.on('shardDisconnect', () => console.log('Shard disconnected!'));
+process.on('unhandledRejection', (e) => console.log('UNHANDLED FEHLER:', e?.message || e));
+process.on('uncaughtException', (e) => console.log('UNCAUGHT FEHLER:', e?.message || e));
+
 http.createServer((req, res) => {
   res.writeHead(200);
   res.end('Beni Bot läuft!');
@@ -17,16 +25,18 @@ http.createServer((req, res) => {
   console.log('Webserver läuft auf Port 10000');
 });
 
-client.once('ready', () => {
+function onReady() {
   console.log(`Eingeloggt als ${client.user.tag}`);
   console.log('Bot logged in Successfully! 🎉');
-});
+}
+client.once('ready', onReady);
+client.once('clientReady', onReady);
 
 async function deleteAfter(msg) {
   setTimeout(() => { msg.delete().catch(() => {}); }, 3000);
 }
 
-// ===== NEU: EMBED + REACTION SYSTEM =====
+// ===== EMBED + REACTION SYSTEM =====
 async function success(message, text) {
   await message.react('✅').catch(() => {});
   const embed = new EmbedBuilder()
@@ -51,17 +61,6 @@ async function fail(message, text) {
   const reply = await message.reply({ embeds: [embed] });
   deleteAfter(reply);
   deleteAfter(message);
-}
-
-async function infoEmbed(message, title, text, color = 0x00FF00) {
-  await message.react('✅').catch(() => {});
-  const embed = new EmbedBuilder()
-    .setColor(color)
-    .setTitle(title)
-    .setDescription(text)
-    .setFooter({ text: `Ausgeführt von ${message.author.tag}` })
-    .setTimestamp();
-  return message.reply({ embeds: [embed] });
 }
 
 client.on('messageCreate', async (message) => {
@@ -348,10 +347,20 @@ client.on('guildMemberAdd', async (member) => {
   channel.send(`Willkommen ${member} zu **${member.guild.name}**!`);
 });
 
-const MYTOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
+// ===== LOGIN - GANZ UNTEN =====
+const MYTOKEN = (process.env.DISCORD_TOKEN || process.env.TOKEN || '').trim();
+
 if (MYTOKEN) {
   console.log('Token found successfully');
+  console.log('Token Länge:', MYTOKEN.length);
+  console.log('Versuche jetzt Login...');
 } else {
   console.log('Token NOT found!');
 }
-client.login(MYTOKEN).catch(e => console.log('LOGIN FEHLER:', e.message));
+
+client.login(MYTOKEN)
+  .then(() => console.log('Login-Anfrage an Discord geschickt...'))
+  .catch(e => {
+    console.log('LOGIN FEHLER:', e.message);
+    console.log('GANZER FEHLER:', e);
+  });
