@@ -12,6 +12,16 @@ const client = new Client({
   ]
 });
 
+// DEBUG - zeigt ob Discord überhaupt antwortet
+client.on('debug', (info) => console.log('DEBUG:', info));
+client.on('warn', (info) => console.log('WARN:', info));
+client.on('shardError', (e) => console.log('SHARD FEHLER:', e.message));
+
+// Wenn nach 15 Sekunden immer noch kein Login, sag Bescheid
+setTimeout(() => {
+  if (!client.user) console.log('LOGIN HÄNGT! Nach 15 Sekunden immer noch nicht eingeloggt!');
+}, 15000);
+
 // Fehler abfangen, damit der Bot nicht lautlos abstürzt
 client.on('error', (e) => console.log('DISCORD CLIENT FEHLER:', e.message));
 client.on('shardDisconnect', () => console.log('Shard disconnected!'));
