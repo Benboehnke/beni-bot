@@ -290,7 +290,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send({ embeds: [noPerm] }).then(m => setTimeout(() => m.delete().catch(()=>{}), 5000));
     return;
   }
-
+});
  // ===== WELCOME MESSAGE - HIER EINFÜGEN =====
 const welcomeChannels = new Map();
 
@@ -312,8 +312,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send({ embeds: [noPerm] });
     return;
   }
-
-  const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]);
+const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]);
 
   if (command === '!enablewm') {
     if (!channel) {
