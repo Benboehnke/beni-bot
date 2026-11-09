@@ -1,3 +1,5 @@
+console.log("ALLE ENV KEYS:", Object.keys(process.env).join(", "));
+
 const { Client, GatewayIntentBits, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const http = require('http');
 
