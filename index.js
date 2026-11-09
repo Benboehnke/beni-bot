@@ -250,10 +250,8 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-console.log('Token da?', !!process.env.TOKEN, 'Länge:', process.env.TOKEN?.length);
-client.login(process.env.TOKEN).then(() => {
-  console.log('LOGIN VERSUCH GESTARTET');
-}).catch(e => {
+console.log('Token da?', !!process.env.DISCORD_TOKEN, 'Länge:', process.env.DISCORD_TOKEN?.length);
+client.login(process.env.DISCORD_TOKEN).then(() => {
   console.log('LOGIN FEHLER:', e.message);
 });
 
