@@ -291,4 +291,80 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
- 
+ // ===== WELCOME MESSAGE - HIER EINFÜGEN =====
+const welcomeChannels = new Map();
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.guild) return;
+  const args = message.content.split(' ');
+  const command = args[0].toLowerCase();
+  if (command !== '!enablewm' && command !== '!disablewm') return;
+
+  setTimeout(() => { message.delete().catch(() => {}); }, 3000);
+
+  if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+    const noPerm = new EmbedBuilder()
+      .setColor(0xFF0000)
+      .setTitle('❌ Keine Berechtigung')
+      .setDescription('Du brauchst **Kanäle verwalten**!')
+      .setTimestamp();
+    message.channel.send({ embeds: [noPerm] });
+    return;
+  }
+
+  const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]);
+
+  if (command === '!enablewm') {
+    if (!channel) {
+      const err = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Kein Channel angegeben!')
+        .setDescription('Benutze: `!enableWM #channel`')
+        .setTimestamp();
+      message.channel.send({ embeds: [err] });
+      return;
+    }
+    welcomeChannels.set(message.guild.id, channel.id);
+    const onEmbed = new EmbedBuilder()
+      .setColor(0x00C853)
+      .setTitle('✅ Welcome Message AN!')
+      .setDescription(`Neue Mitglieder werden jetzt in ${channel} begrüßt!`)
+      .addFields(
+        { name: '📍 Channel', value: `${channel}`, inline: true },
+        { name: '👋 Nachricht', value: 'Willkommen @user zu *Servername*!', inline: true }
+      )
+      .setFooter({ text: `Aktiviert von ${message.author.tag}` })
+      .setTimestamp();
+    message.channel.send({ embeds: [onEmbed] });
+  }
+
+  if (command === '!disablewm') {
+    if (!welcomeChannels.has(message.guild.id)) {
+      const err = new EmbedBuilder()
+        .setColor(0xFFAA00)
+        .setTitle('⚠️ War schon aus!')
+        .setDescription('Welcome Message war schon aus.')
+        .setTimestamp();
+      message.channel.send({ embeds: [err] });
+      return;
+    }
+    welcomeChannels.delete(message.guild.id);
+    const offEmbed = new EmbedBuilder()
+      .setColor(0xFF0000)
+      .setTitle('❌ Welcome Message AUS!')
+      .setDescription('Neue Mitglieder werden nicht mehr begrüßt.')
+      .setFooter({ text: `Deaktiviert von ${message.author.tag}` })
+      .setTimestamp();
+    message.channel.send({ embeds: [offEmbed] });
+  }
+});
+
+client.on('guildMemberAdd', async (member) => {
+  const channelId = welcomeChannels.get(member.guild.id);
+  if (!channelId) return;
+  const channel = member.guild.channels.cache.get(channelId);
+  if (!channel) return;
+  channel.send(`Willkommen ${member} zu **${member.guild.name}**!`);
+});
+// ===== ENDE WELCOME MESSAGE =====
