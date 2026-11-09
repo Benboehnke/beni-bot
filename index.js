@@ -19,6 +19,7 @@ http.createServer((req, res) => {
 
 client.once('ready', () => {
   console.log(`Eingeloggt als ${client.user.tag}`);
+  console.log('Bot logged in Successfully! 🎉');
 });
 
 async function deleteAfter(msg) {
