@@ -328,3 +328,13 @@ client.on('guildMemberAdd', async (member) => {
 });
 // ===== ENDE WELCOME MESSAGE =====
 
+// GANZ UNTEN - LETZTE ZEILEN
+const MYTOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
+
+if (MYTOKEN) {
+  console.log('Token found successfully');
+} else {
+  console.log('Token NOT found!');
+}
+
+client.login(MYTOKEN).catch(e => console.log('LOGIN FEHLER:', e.message));
