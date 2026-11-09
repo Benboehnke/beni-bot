@@ -10,7 +10,6 @@ const client = new Client({
   ]
 });
 
-// Webserver damit Render nicht schläft
 http.createServer((req, res) => {
   res.writeHead(200);
   res.end('Beni Bot läuft!');
@@ -22,18 +21,46 @@ client.once('ready', () => {
   console.log(`Eingeloggt als ${client.user.tag}`);
 });
 
-// Hilfs-Funktion: Nachricht nach 3s löschen
 async function deleteAfter(msg) {
-  setTimeout(() => {
-    msg.delete().catch(() => {});
-  }, 3000);
+  setTimeout(() => { msg.delete().catch(() => {}); }, 3000);
 }
 
-// Hilfs-Funktion: Antwort senden und nach 3s löschen
-async function replyAndDelete(message, text) {
-  const reply = await message.reply(text);
+// ===== NEU: EMBED + REACTION SYSTEM =====
+async function success(message, text) {
+  await message.react('✅').catch(() => {});
+  const embed = new EmbedBuilder()
+    .setColor(0x00FF00)
+    .setTitle('✅ Erfolgreich!')
+    .setDescription(text)
+    .setFooter({ text: `Ausgeführt von ${message.author.tag}` })
+    .setTimestamp();
+  const reply = await message.reply({ embeds: [embed] });
   deleteAfter(reply);
   deleteAfter(message);
+}
+
+async function fail(message, text) {
+  await message.react('❌').catch(() => {});
+  const embed = new EmbedBuilder()
+    .setColor(0xFF0000)
+    .setTitle('❌ Fehlgeschlagen!')
+    .setDescription(text)
+    .setFooter({ text: `Ausgeführt von ${message.author.tag}` })
+    .setTimestamp();
+  const reply = await message.reply({ embeds: [embed] });
+  deleteAfter(reply);
+  deleteAfter(message);
+}
+
+async function infoEmbed(message, title, text, color = 0x00FF00) {
+  await message.react('✅').catch(() => {});
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(title)
+    .setDescription(text)
+    .setFooter({ text: `Ausgeführt von ${message.author.tag}` })
+    .setTimestamp();
+  return message.reply({ embeds: [embed] });
 }
 
 client.on('messageCreate', async (message) => {
@@ -44,56 +71,58 @@ client.on('messageCreate', async (message) => {
   // !ban
   if (command === '!ban') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
-      return replyAndDelete(message, 'Nö, du darfst niemanden bannen. Dafür fehlen dir die Rechte!');
+      return fail(message, 'Nö, du darfst niemanden bannen. Dafür fehlen dir die Rechte!');
     }
     const user = message.mentions.members.first();
-    if (!user) return replyAndDelete(message, 'Ey, wen soll ich denn bannen? Markier mal jemanden! Beispiel: `!ban @Max nervt`');
+    if (!user) return fail(message, 'Ey, wen soll ich denn bannen? Markier mal jemanden! Beispiel: `!ban @Max nervt`');
     const reason = args.slice(1).join(' ') || 'Kein Grund angegeben';
-    if (!user.bannable) return replyAndDelete(message, 'Den kann ich leider nicht bannen, der steht über mir!');
+    if (!user.bannable) return fail(message, 'Den kann ich leider nicht bannen, der steht über mir!');
     try {
-      await user.send(`Du wurdest vom Server **${message.guild.name}** gebannt!\n\n**Grund:** ${reason}\n**Gebannt von:** ${message.author.tag}\n\nTja, das war's leider. Wenn du denkst, das war ein Fehler, melde dich beim Team!`);
+      await user.send(`Du wurdest vom Server **${message.guild.name}** gebannt!\n\n**Grund:** ${reason}\n**Gebannt von:** ${message.author.tag}`);
     } catch {}
     await user.ban({ reason });
-    return replyAndDelete(message, `BAM! ${user.user.tag} wurde gebannt! Grund: ${reason} - Der kommt so schnell nicht wieder!`);
+    return success(message, `BAM! **${user.user.tag}** wurde gebannt!\n**Grund:** ${reason}`);
   }
 
   // !unban
   if (command === '!unban') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
-      return replyAndDelete(message, 'Du hast keine Rechte dazu!');
+      return fail(message, 'Du hast keine Rechte dazu!');
     }
     const userId = args[0]?.replace(/[<@!>]/g, '');
-    if (!userId) return replyAndDelete(message, 'Benutzung: `!unban <User-ID>`');
+    if (!userId) return fail(message, 'Benutzung: `!unban <User-ID>`');
     try {
       await message.guild.bans.remove(userId);
-      return replyAndDelete(message, 'User wurde entbannt!');
+      return success(message, 'User wurde entbannt!');
     } catch {
-      return replyAndDelete(message, 'User nicht gefunden oder nicht gebannt!');
+      return fail(message, 'User nicht gefunden oder nicht gebannt!');
     }
   }
 
   // !kick
   if (command === '!kick') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) {
-      return replyAndDelete(message, 'Du darfst niemanden kicken, sorry!');
+      return fail(message, 'Du darfst niemanden kicken, sorry!');
     }
     const user = message.mentions.members.first();
-    if (!user) return replyAndDelete(message, 'Wen soll ich kicken? Markier den mal! Beispiel: `!kick @Max nervt`');
+    if (!user) return fail(message, 'Wen soll ich kicken? Markier den mal! Beispiel: `!kick @Max nervt`');
     const reason = args.slice(1).join(' ') || 'Kein Grund angegeben';
-    if (!user.kickable) return replyAndDelete(message, 'Den kann ich nicht kicken, der ist zu mächtig für mich!');
+    if (!user.kickable) return fail(message, 'Den kann ich nicht kicken, der ist zu mächtig für mich!');
     await user.kick(reason);
-    return replyAndDelete(message, `Raus mit dir! ${user.user.tag} wurde gekickt! Grund: ${reason} - Tschüss!`);
+    return success(message, `Raus mit dir! **${user.user.tag}** wurde gekickt!\n**Grund:** ${reason}`);
   }
 
   // !clear
   if (command === '!clear') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
-      return replyAndDelete(message, 'Du darfst keine Nachrichten löschen!');
+      return fail(message, 'Du darfst keine Nachrichten löschen!');
     }
     const amount = parseInt(args[0]);
-    if (!amount || amount < 1 || amount > 100) return replyAndDelete(message, 'Sag mir mal eine Zahl von 1 bis 100! Beispiel: `!clear 10`');
+    if (!amount || amount < 1 || amount > 100) return fail(message, 'Sag mir mal eine Zahl von 1 bis 100! Beispiel: `!clear 10`');
     await message.channel.bulkDelete(amount + 1, true).catch(() => {});
-    const reply = await message.channel.send(`Sauber! Ich habe ${amount} Nachrichten weggeputzt! Der Chat glänzt wieder!`);
+    await message.react('✅').catch(() => {});
+    const embed = new EmbedBuilder().setColor(0x00FF00).setTitle('✅ Erfolgreich!').setDescription(`Sauber! Ich habe **${amount}** Nachrichten weggeputzt! Der Chat glänzt wieder!`).setTimestamp();
+    const reply = await message.channel.send({ embeds: [embed] });
     deleteAfter(reply);
     return;
   }
@@ -101,92 +130,93 @@ client.on('messageCreate', async (message) => {
   // !mute
   if (command === '!mute') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return replyAndDelete(message, 'Du darfst niemanden muten!');
+      return fail(message, 'Du darfst niemanden muten!');
     }
     const user = message.mentions.members.first();
-    if (!user) return replyAndDelete(message, 'Wen soll ich muten? Beispiel: `!mute @Max 10m spammt`');
+    if (!user) return fail(message, 'Wen soll ich muten? Beispiel: `!mute @Max 10m spammt`');
     const durationStr = args[1];
-    if (!durationStr) return replyAndDelete(message, 'Wie lange denn? Beispiel: `!mute @Max 10m spammt` - m = Minuten, h = Stunden, d = Tage');
+    if (!durationStr) return fail(message, 'Wie lange denn? Beispiel: `!mute @Max 10m spammt` - m = Minuten, h = Stunden, d = Tage');
     let ms = 0;
     if (durationStr.endsWith('m')) ms = parseInt(durationStr) * 60 * 1000;
     else if (durationStr.endsWith('h')) ms = parseInt(durationStr) * 60 * 60 * 1000;
     else if (durationStr.endsWith('d')) ms = parseInt(durationStr) * 24 * 60 * 60 * 1000;
     else if (durationStr.endsWith('s')) ms = parseInt(durationStr) * 1000;
-    else return replyAndDelete(message, 'Hä? So eine Zeit kenne ich nicht. Nimm z.B. `10m`, `1h` oder `1d`');
+    else return fail(message, 'Hä? So eine Zeit kenne ich nicht. Nimm z.B. `10m`, `1h` oder `1d`');
     const reason = args.slice(2).join(' ') || 'Kein Grund angegeben';
     try {
-      await user.send(`Du wurdest auf dem Server **${message.guild.name}** gemutet!\n\n**Dauer:** ${durationStr}\n**Grund:** ${reason}\n**Gemutet von:** ${message.author.tag}\n\nErstmal kurz durchatmen und chillen, danach darfst du wieder schreiben!`);
+      await user.send(`Du wurdest auf dem Server **${message.guild.name}** gemutet!\n\n**Dauer:** ${durationStr}\n**Grund:** ${reason}\n**Gemutet von:** ${message.author.tag}`);
     } catch {}
     await user.timeout(ms, reason);
-    return replyAndDelete(message, `Pssst! ${user.user.tag} muss jetzt für ${durationStr} leise sein! Grund: ${reason} - Mal gucken ob er sich benimmt!`);
+    return success(message, `Pssst! **${user.user.tag}** muss jetzt für **${durationStr}** leise sein!\n**Grund:** ${reason}`);
   }
 
   // !unmute
   if (command === '!unmute') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return replyAndDelete(message, 'Du hast keine Rechte dazu!');
+      return fail(message, 'Du hast keine Rechte dazu!');
     }
     const target = message.mentions.members.first();
-    if (!target) return replyAndDelete(message, 'Benutzung: `!unmute @User`');
+    if (!target) return fail(message, 'Benutzung: `!unmute @User`');
     try {
       await target.timeout(null);
       await target.send('Du wurdest entmutet!').catch(() => {});
-      return replyAndDelete(message, `${target} wurde entmutet!`);
+      return success(message, `${target} wurde entmutet!`);
     } catch {
-      return replyAndDelete(message, 'Konnte den User nicht entmuten!');
+      return fail(message, 'Konnte den User nicht entmuten!');
     }
   }
 
   // !sendmessage
   if (command === '!sendmessage') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
-      return replyAndDelete(message, 'Du darfst keine Nachrichten in andere Channels schicken!');
+      return fail(message, 'Du darfst keine Nachrichten in andere Channels schicken!');
     }
     const channel = message.mentions.channels.first();
-    if (!channel) return replyAndDelete(message, 'In welchen Channel denn? Beispiel: `!sendmessage #allgemein Hallo Leute!`');
+    if (!channel) return fail(message, 'In welchen Channel denn? Beispiel: `!sendmessage #allgemein Hallo Leute!`');
     const text = args.slice(1).join(' ');
-    if (!text) return replyAndDelete(message, 'Und was soll ich schreiben? Der Text fehlt!');
+    if (!text) return fail(message, 'Und was soll ich schreiben? Der Text fehlt!');
     await channel.send(text);
-    return replyAndDelete(message, `Erledigt! Deine Nachricht ist jetzt in ${channel} - Sieht gut aus!`);
+    return success(message, `Erledigt! Deine Nachricht ist jetzt in ${channel}!`);
   }
 
   // !dm
   if (command === '!dm') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
-      return replyAndDelete(message, 'Du darfst keine DMs schicken!');
+      return fail(message, 'Du darfst keine DMs schicken!');
     }
     const user = message.mentions.members.first();
-    if (!user) return replyAndDelete(message, 'Wem soll ich schreiben? Beispiel: `!dm @Max Hey, komm mal online!`');
+    if (!user) return fail(message, 'Wem soll ich schreiben? Beispiel: `!dm @Max Hey, komm mal online!`');
     const text = args.slice(1).join(' ');
-    if (!text) return replyAndDelete(message, 'Was soll ich dem denn schreiben?');
+    if (!text) return fail(message, 'Was soll ich dem denn schreiben?');
     try {
       await user.send(`Hey! Nachricht von ${message.author.tag} aus dem Server **${message.guild.name}**:\n\n${text}`);
-      return replyAndDelete(message, `DM ist raus an ${user.user.tag}! Der hat Post von dir!`);
+      return success(message, `DM ist raus an **${user.user.tag}**! Der hat Post von dir!`);
     } catch {
-      return replyAndDelete(message, `Uff, ich konnte ${user.user.tag} keine DM schicken. Der hat wohl seine DMs zu!`);
+      return fail(message, `Uff, ich konnte **${user.user.tag}** keine DM schicken. Der hat wohl seine DMs zu!`);
     }
   }
 
   // !lock
   if (command === '!lock') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
-      return replyAndDelete(message, 'Du darfst den Channel nicht sperren!');
+      return fail(message, 'Du darfst den Channel nicht sperren!');
     }
     await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
-    return replyAndDelete(message, 'Zugeschlossen! In diesem Channel kann jetzt keiner mehr schreiben. Nur noch lesen und staunen!');
+    return success(message, 'Zugeschlossen! In diesem Channel kann jetzt keiner mehr schreiben.');
   }
 
   // !unlock
   if (command === '!unlock') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
-      return replyAndDelete(message, 'Du darfst den Channel nicht entsperren!');
+      return fail(message, 'Du darfst den Channel nicht entsperren!');
     }
     await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
-    return replyAndDelete(message, 'Wieder offen! Ihr dürft hier wieder schreiben, tobt euch aus!');
+    return success(message, 'Wieder offen! Ihr dürft hier wieder schreiben, tobt euch aus!');
   }
 
   // !help
   if (command === '!help') {
+    await message.react('✅').catch(() => {});
     deleteAfter(message);
     const embed = new EmbedBuilder()
       .setTitle('📢 BENI BOT - ALLE COMMANDS')
@@ -212,29 +242,38 @@ client.on('messageCreate', async (message) => {
 
   // !ping
   if (command === '!ping') {
+    await message.react('✅').catch(() => {});
     const embed = new EmbedBuilder()
       .setTitle('🏓 Pong!')
       .setDescription('Benutze `!help` für mehr Informationen')
       .setColor(0x00FF00)
       .setFooter({ text: 'Beni Bot • Online!' });
-    return message.reply({ embeds: [embed] });
+    const r = await message.reply({ embeds: [embed] });
+    deleteAfter(r); deleteAfter(message);
+    return;
   }
 
   // !hallo
   if (command === '!hallo') {
-    return message.reply('Wie gehts! 👋');
+    await message.react('👋').catch(() => {});
+    const embed = new EmbedBuilder().setColor(0x00FF00).setTitle('👋 Hallo!').setDescription('Wie gehts! 👋').setTimestamp();
+    const r = await message.reply({ embeds: [embed] });
+    deleteAfter(r); deleteAfter(message);
+    return;
   }
 
   // !sag
   if (command === '!sag') {
     const text = args.join(' ');
-    if (!text) return message.reply('Schreib so: `!sag Hallo Leute`');
+    if (!text) return fail(message, 'Schreib so: `!sag Hallo Leute`');
+    await message.react('✅').catch(() => {});
     await message.delete().catch(() => {});
     return message.channel.send(text);
   }
 
   // !owner
   if (command === '!owner') {
+    await message.react('✅').catch(() => {});
     const embed = new EmbedBuilder()
       .setTitle('👑 DER ERSTELLER VON BENI BOT')
       .setDescription('**Elyias**')
@@ -246,7 +285,9 @@ client.on('messageCreate', async (message) => {
         { name: '💡 Fun Fact', value: 'Ohne Elyias gäbe es Beni Bot nicht!', inline: false }
       )
       .setFooter({ text: 'Beni Bot • Made by Elyias' });
-    return message.reply({ embeds: [embed] });
+    const r = await message.reply({ embeds: [embed] });
+    deleteAfter(r); deleteAfter(message);
+    return;
   }
 });
 
@@ -263,11 +304,8 @@ client.on('messageCreate', async (message) => {
   setTimeout(() => { message.delete().catch(() => {}); }, 3000);
 
   if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
-    const noPerm = new EmbedBuilder()
-      .setColor(0xFF0000)
-      .setTitle('❌ Keine Berechtigung')
-      .setDescription('Du brauchst **Kanäle verwalten**!')
-      .setTimestamp();
+    await message.react('❌').catch(() => {});
+    const noPerm = new EmbedBuilder().setColor(0xFF0000).setTitle('❌ Keine Berechtigung').setDescription('Du brauchst **Kanäle verwalten**!').setTimestamp();
     message.channel.send({ embeds: [noPerm] });
     return;
   }
@@ -276,45 +314,27 @@ client.on('messageCreate', async (message) => {
 
   if (command === '!enablewm') {
     if (!channel) {
-      const err = new EmbedBuilder()
-        .setColor(0xFF0000)
-        .setTitle('❌ Kein Channel angegeben!')
-        .setDescription('Benutze: `!enableWM #channel`')
-        .setTimestamp();
+      await message.react('❌').catch(() => {});
+      const err = new EmbedBuilder().setColor(0xFF0000).setTitle('❌ Kein Channel angegeben!').setDescription('Benutze: `!enableWM #channel`').setTimestamp();
       message.channel.send({ embeds: [err] });
       return;
     }
     welcomeChannels.set(message.guild.id, channel.id);
-    const onEmbed = new EmbedBuilder()
-      .setColor(0x00C853)
-      .setTitle('✅ Welcome Message AN!')
-      .setDescription(`Neue Mitglieder werden jetzt in ${channel} begrüßt!`)
-      .addFields(
-        { name: '📍 Channel', value: `${channel}`, inline: true },
-        { name: '👋 Nachricht', value: 'Willkommen @user zu *Servername*!', inline: true }
-      )
-      .setFooter({ text: `Aktiviert von ${message.author.tag}` })
-      .setTimestamp();
+    await message.react('✅').catch(() => {});
+    const onEmbed = new EmbedBuilder().setColor(0x00C853).setTitle('✅ Welcome Message AN!').setDescription(`Neue Mitglieder werden jetzt in ${channel} begrüßt!`).setFooter({ text: `Aktiviert von ${message.author.tag}` }).setTimestamp();
     message.channel.send({ embeds: [onEmbed] });
   }
 
   if (command === '!disablewm') {
     if (!welcomeChannels.has(message.guild.id)) {
-      const err = new EmbedBuilder()
-        .setColor(0xFFAA00)
-        .setTitle('⚠️ War schon aus!')
-        .setDescription('Welcome Message war schon aus.')
-        .setTimestamp();
+      await message.react('❌').catch(() => {});
+      const err = new EmbedBuilder().setColor(0xFFAA00).setTitle('⚠️ War schon aus!').setDescription('Welcome Message war schon aus.').setTimestamp();
       message.channel.send({ embeds: [err] });
       return;
     }
     welcomeChannels.delete(message.guild.id);
-    const offEmbed = new EmbedBuilder()
-      .setColor(0xFF0000)
-      .setTitle('❌ Welcome Message AUS!')
-      .setDescription('Neue Mitglieder werden nicht mehr begrüßt.')
-      .setFooter({ text: `Deaktiviert von ${message.author.tag}` })
-      .setTimestamp();
+    await message.react('✅').catch(() => {});
+    const offEmbed = new EmbedBuilder().setColor(0xFF0000).setTitle('❌ Welcome Message AUS!').setDescription('Neue Mitglieder werden nicht mehr begrüßt.').setFooter({ text: `Deaktiviert von ${message.author.tag}` }).setTimestamp();
     message.channel.send({ embeds: [offEmbed] });
   }
 });
@@ -326,15 +346,11 @@ client.on('guildMemberAdd', async (member) => {
   if (!channel) return;
   channel.send(`Willkommen ${member} zu **${member.guild.name}**!`);
 });
-// ===== ENDE WELCOME MESSAGE =====
 
-// GANZ UNTEN - LETZTE ZEILEN
 const MYTOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
-
 if (MYTOKEN) {
   console.log('Token found successfully');
 } else {
   console.log('Token NOT found!');
 }
-
 client.login(MYTOKEN).catch(e => console.log('LOGIN FEHLER:', e.message));
