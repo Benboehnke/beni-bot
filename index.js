@@ -328,11 +328,3 @@ client.on('guildMemberAdd', async (member) => {
 });
 // ===== ENDE WELCOME MESSAGE =====
 
-// ===== LOGIN - MUSS GANZ UNTEN STEHEN =====
-const MYTOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
-console.log('Token da?', !!MYTOKEN, 'Länge:', MYTOKEN?.length);
-client.login(MYTOKEN).then(() => {
-  console.log('LOGIN VERSUCH GESTARTET');
-}).catch(e => {
-  console.log('LOGIN FEHLER:', e.message);
-});
