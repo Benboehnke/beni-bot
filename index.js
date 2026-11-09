@@ -78,6 +78,35 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
+  // !id - ID anzeigen + Copy Button - NUR der Command-User sieht die ID beim Button-Klick
+  if (command === '!id') {
+    await message.react('⏳').catch(() => {});
+    const target = message.mentions.users.first();
+    if (!target) return fail(message, 'Ey, wen denn? Markier mal jemanden! Beispiel: `!id @Max`');
+
+    const embed = new EmbedBuilder()
+      .setTitle(`ID von ${target.username}`)
+      .setDescription(`Die ID ist versteckt, damit sie nicht jeder sieht.\nKlick unten auf den Button - nur du siehst sie dann!`)
+      .setThumbnail(target.displayAvatarURL())
+      .setColor(0x5865F2)
+      .setFooter({ text: `Angefordert von ${message.author.tag}` })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`copy_id_${target.id}`)
+        .setLabel('📋 ID Kopieren')
+        .setStyle(ButtonStyle.Primary)
+    );
+
+    await message.react('✅').catch(() => {});
+    const reply = await message.reply({ embeds: [embed], components: [row] });
+    // Command-Nachricht + Embed nach 15 Sek löschen, damit die ID nicht rumliegt
+    setTimeout(() => { reply.delete().catch(() => {}); }, 15000);
+    deleteAfter(message);
+    return;
+  }
+
   // !ban
   if (command === '!ban') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
@@ -236,6 +265,7 @@ client.on('messageCreate', async (message) => {
         { name: '👮 MODERATION', value: '`!ban @User Grund`\n`!unban User-ID`\n`!kick @User Grund`\n`!mute @User Zeit Grund`\n`!unmute @User`\n`!clear Zahl`', inline: false },
         { name: '💬 NACHRICHTEN', value: '`!sendmessage #Channel Text`\n`!dm @User Text`\n`!sag Text`', inline: false },
         { name: '🔒 CHANNEL', value: '`!lock`\n`!unlock`', inline: false },
+        { name: '🆔 USER', value: '`!id @User`', inline: false },
         { name: '✅ SONSTIGES', value: '`!ping`\n`!hallo`\n`!owner`\n`!help`', inline: false },
         { name: '⏰ MUTE ZEITEN', value: '`10s` = Sekunden, `10m` = Minuten, `1h` = Stunden, `1d` = Tage', inline: false }
       )
@@ -299,6 +329,16 @@ client.on('messageCreate', async (message) => {
     deleteAfter(r); deleteAfter(message);
     return;
   }
+});
+
+// ===== BUTTON HANDLER FÜR !id COPY BUTTON =====
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return;
+  if (!interaction.customId.startsWith('copy_id_')) return;
+
+  const idToCopy = interaction.customId.replace('copy_id_', '');
+  // ephemeral: true = NUR der, der den Button klickt, sieht die ID - im selben Chat!
+  await interaction.reply({ content: `Hier zum Kopieren:\n\`\`\`${idToCopy}\`\`\``, ephemeral: true }).catch(() => {});
 });
 
 // ===== WELCOME MESSAGE =====
