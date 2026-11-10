@@ -78,12 +78,11 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // !id - ID anzeigen + Copy Button - NUR der Command-User sieht die ID beim Button-Klick
+  // !id
   if (command === '!id') {
     await message.react('⏳').catch(() => {});
     const target = message.mentions.users.first();
     if (!target) return fail(message, 'Ey, wen denn? Markier mal jemanden! Beispiel: `!id @Max`');
-
     const embed = new EmbedBuilder()
       .setTitle(`ID von ${target.username}`)
       .setDescription(`Die ID ist versteckt, damit sie nicht jeder sieht.\nKlick unten auf den Button - nur du siehst sie dann!`)
@@ -91,17 +90,14 @@ client.on('messageCreate', async (message) => {
       .setColor(0x5865F2)
       .setFooter({ text: `Angefordert von ${message.author.tag}` })
       .setTimestamp();
-
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`copy_id_${target.id}`)
         .setLabel('📋 ID Kopieren')
         .setStyle(ButtonStyle.Primary)
     );
-
     await message.react('✅').catch(() => {});
     const reply = await message.reply({ embeds: [embed], components: [row] });
-    // Command-Nachricht + Embed nach 15 Sek löschen, damit die ID nicht rumliegt
     setTimeout(() => { reply.delete().catch(() => {}); }, 15000);
     deleteAfter(message);
     return;
@@ -335,9 +331,7 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
   if (!interaction.customId.startsWith('copy_id_')) return;
-
   const idToCopy = interaction.customId.replace('copy_id_', '');
-  // ephemeral: true = NUR der, der den Button klickt, sieht die ID - im selben Chat!
   await interaction.reply({ content: `Hier zum Kopieren:\n\`\`\`${idToCopy}\`\`\``, ephemeral: true }).catch(() => {});
 });
 
@@ -350,18 +344,14 @@ client.on('messageCreate', async (message) => {
   const args = message.content.split(' ');
   const command = args[0].toLowerCase();
   if (command !== '!enablewm' && command !== '!disablewm') return;
-
   setTimeout(() => { message.delete().catch(() => {}); }, 3000);
-
   if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
     await message.react('❌').catch(() => {});
     const noPerm = new EmbedBuilder().setColor(0xFF0000).setTitle('❌ Keine Berechtigung').setDescription('Du brauchst **Kanäle verwalten**!').setTimestamp();
     message.channel.send({ embeds: [noPerm] });
     return;
   }
-
   const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]);
-
   if (command === '!enablewm') {
     if (!channel) {
       await message.react('❌').catch(() => {});
@@ -374,7 +364,6 @@ client.on('messageCreate', async (message) => {
     const onEmbed = new EmbedBuilder().setColor(0x00C853).setTitle('✅ Welcome Message AN!').setDescription(`Neue Mitglieder werden jetzt in ${channel} begrüßt!`).setFooter({ text: `Aktiviert von ${message.author.tag}` }).setTimestamp();
     message.channel.send({ embeds: [onEmbed] });
   }
-
   if (command === '!disablewm') {
     if (!welcomeChannels.has(message.guild.id)) {
       await message.react('❌').catch(() => {});
@@ -397,9 +386,8 @@ client.on('guildMemberAdd', async (member) => {
   channel.send(`Willkommen ${member} zu **${member.guild.name}**!`);
 });
 
-// ===== LOGIN - GANZ UNTEN =====
+// ===== LOGIN =====
 const MYTOKEN = (process.env.DISCORD_TOKEN || process.env.TOKEN || '').trim();
-
 if (MYTOKEN) {
   console.log('Token found successfully');
   console.log('Token Länge:', MYTOKEN.length);
@@ -407,7 +395,6 @@ if (MYTOKEN) {
 } else {
   console.log('Token NOT found!');
 }
-
 client.login(MYTOKEN)
   .then(() => console.log('Login-Anfrage an Discord geschickt...'))
   .catch(e => {
@@ -423,15 +410,7 @@ fetch('https://discord.com/api/v10/users/@me', {
   console.log('HTTPS TEST Antwort:', (await r.text()).slice(0, 200));
 }).catch(e => console.log('HTTPS TEST FEHLER:', e.message));
 
-
-// ============================================================
-// BENI BOT - UNTEN DRAN MACHEN - BEIDE COMMANDS
-// !dashboard + !messagelog
-// Ablauf: ✅ Haken -> dann erst Embed
-// ============================================================
 const fs = require('fs');
-
-// ---------- MESSAGELOG SPEICHER ----------
 let logChannels = {};
 if (fs.existsSync('./logchannels.json')) {
   try { logChannels = JSON.parse(fs.readFileSync('./logchannels.json', 'utf8')); } catch (e) { logChannels = {}; }
@@ -446,72 +425,30 @@ function saveLogChannels() {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.content.toLowerCase() !== '!dashboard' && message.content.toLowerCase() !== '!dash' && message.content.toLowerCase() !== '!website' && message.content.toLowerCase() !== '!web') return;
-
   try {
-    // SCHRITT 1: HAKEN
     await message.react('✅').catch(() => {});
-
-    // SCHRITT 2: WARTEN
     await new Promise(r => setTimeout(r, 500));
-
-    // SCHRITT 3: EMBED
     const dashboardEmbed = new EmbedBuilder()
       .setTitle('🌐 BENI BOT - OFFICIAL DASHBOARD')
-      .setDescription(
-        'Willkommen im offiziellen Dashboard von **Beni Bot**!\n\n' +
-        'Hier kannst du alles rund um Beni Bot sehen, testen und verwalten.\n' +
-        'Das Dashboard ist **100% kostenlos** und für jeden zugänglich.\n\n' +
-        '👇 **Klick unten auf den Link, um das Dashboard zu öffnen!**'
-      )
+      .setDescription('Willkommen im offiziellen Dashboard von **Beni Bot**!\n\nHier kannst du alles rund um Beni Bot sehen, testen und verwalten.\nDas Dashboard ist **100% kostenlos** und für jeden zugänglich.\n\n👇 **Klick unten auf den Link, um das Dashboard zu öffnen!**')
       .addFields(
-        {
-          name: '🔗 DASHBOARD LINK',
-          value: '[**➡️ KLICKE HIER - BENI BOT DASHBOARD ÖFFNEN ⬅️**](https://beni-bot-dashboard.netlify.app/)\n\n`https://beni-bot-dashboard.netlify.app/`',
-          inline: false
-        },
-        {
-          name: '📜 WAS KANNST DU AUF DEM DASHBOARD MACHEN?',
-          value:
-            '🔒 **Mit Discord einloggen** - Sicher mit deinem Discord Account\n' +
-            '📜 **Alle Commands sehen** - Alle Befehle auf einen Blick\n' +
-            '🎮 **Live Chat Simulator** - Teste Beni Bot direkt auf der Website\n' +
-            '🕹️ **Mini-Game spielen** - Klick den Beni und knack den Highscore\n' +
-            '⭐ **Bot bewerten** - Gib Beni Bot Sterne und Feedback\n' +
-            '🏆 **Top Server sehen** - Welche Server nutzen Beni Bot?\n' +
-            '📢 **Neuigkeiten & Updates** - Immer auf dem neuesten Stand bleiben',
-          inline: false
-        },
-        {
-          name: '📊 BENI BOT STATS',
-          value: '• **Uptime:** 99.9%\n• **Ping:** Schnell & Stabil\n• **Version:** v2.0 - Dashboard Update\n• **Status:** Online',
-          inline: true
-        },
-        {
-          name: '👑 MADE BY',
-          value: '**Elyias**\nFounder & Developer\nvon Beni Bot',
-          inline: true
-        },
-        {
-          name: '💡 TIPP',
-          value: 'Wenn du Beni Bot noch nicht auf deinem Server hast, kannst du ihn direkt über das Dashboard zu deinem Server hinzufügen!',
-          inline: false
-        }
+        { name: '🔗 DASHBOARD LINK', value: '[**➡️ KLICKE HIER - BENI BOT DASHBOARD ÖFFNEN ⬅️**](https://beni-bot-dashboard.netlify.app/)\n\n`https://beni-bot-dashboard.netlify.app/`', inline: false },
+        { name: '📜 WAS KANNST DU AUF DEM DASHBOARD MACHEN?', value: '🔒 **Mit Discord einloggen** - Sicher mit deinem Discord Account\n📜 **Alle Commands sehen** - Alle Befehle auf einen Blick\n🎮 **Live Chat Simulator** - Teste Beni Bot direkt auf der Website\n🕹️ **Mini-Game spielen** - Klick den Beni und knack den Highscore\n⭐ **Bot bewerten** - Gib Beni Bot Sterne und Feedback\n🏆 **Top Server sehen** - Welche Server nutzen Beni Bot?\n📢 **Neuigkeiten & Updates** - Immer auf dem neuesten Stand bleiben', inline: false },
+        { name: '📊 BENI BOT STATS', value: '• **Uptime:** 99.9%\n• **Ping:** Schnell & Stabil\n• **Version:** v2.0 - Dashboard Update\n• **Status:** Online', inline: true },
+        { name: '👑 MADE BY', value: '**Elyias**\nFounder & Developer\nvon Beni Bot', inline: true },
+        { name: '💡 TIPP', value: 'Wenn du Beni Bot noch nicht auf deinem Server hast, kannst du ihn direkt über das Dashboard zu deinem Server hinzufügen!', inline: false }
       )
       .setColor(0x00AAFF)
       .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 512 }))
       .setFooter({ text: 'BENI BOT • Dashboard • Made by Elyias', iconURL: client.user.displayAvatarURL() })
       .setTimestamp();
-
     const dashboardButtons = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder().setLabel('🌐 Dashboard öffnen').setStyle(ButtonStyle.Link).setURL('https://beni-bot-dashboard.netlify.app/'),
         new ButtonBuilder().setLabel('➕ Bot hinzufügen').setStyle(ButtonStyle.Link).setURL('https://discord.com/oauth2/authorize?client_id=1568252045574668298&permissions=8&scope=bot%20applications.commands'),
         new ButtonBuilder().setLabel('💬 Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH')
       );
-
-    // SCHRITT 4: SENDEN - BLEIBT STEHEN!
     await message.channel.send({ embeds: [dashboardEmbed], components: [dashboardButtons] });
-
   } catch (e) { console.log('Fehler bei !dashboard:', e); }
 });
 
@@ -521,8 +458,6 @@ client.on('messageCreate', async (message) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.toLowerCase().startsWith('!messagelog')) return;
-
-  // ----- !messagelog off -----
   if (message.content.toLowerCase() === '!messagelog off') {
     await message.react('✅').catch(() => {});
     await new Promise(r => setTimeout(r, 400));
@@ -533,8 +468,6 @@ client.on('messageCreate', async (message) => {
     saveLogChannels();
     return message.channel.send({ embeds: [new EmbedBuilder().setTitle('❌ MESSAGE LOG DEAKTIVIERT').setDescription('Es werden ab jetzt **keine** Nachrichten mehr geloggt.').addFields({ name: '👤 Deaktiviert von', value: `${message.author}`, inline: true }, { name: '🔁 Wieder aktivieren', value: '`!messagelog #channel`', inline: true }).setColor(0xFF0000).setFooter({ text: 'BENI BOT • Message Log System' }).setTimestamp()] });
   }
-
-  // ----- !messagelog status -----
   if (message.content.toLowerCase() === '!messagelog status') {
     await message.react('✅').catch(() => {});
     await new Promise(r => setTimeout(r, 400));
@@ -543,36 +476,24 @@ client.on('messageCreate', async (message) => {
     const ch = message.guild.channels.cache.get(currentId);
     return message.channel.send(`✅ Message Log ist aktiv in: ${ch ? ch : 'Unbekannter Channel'}`);
   }
-
-  // ----- !messagelog #channel -----
   try {
     if (!message.member.permissions.has('Administrator')) {
       await message.react('❌').catch(() => {});
       return message.channel.send({ embeds: [new EmbedBuilder().setTitle('❌ KEINE BERECHTIGUNG').setDescription('Du brauchst **Administrator** Rechte!').setColor(0xFF0000).setTimestamp()] });
     }
-
     const targetChannel = message.mentions.channels.first();
     if (!targetChannel) {
       await message.react('❌').catch(() => {});
       return message.channel.send({ embeds: [new EmbedBuilder().setTitle('❌ FALSCHE BENUTZUNG').setDescription('Du musst einen Channel angeben!').addFields({ name: '✅ Richtig', value: '`!messagelog #logs`', inline: false }, { name: '⚙️ Weitere Befehle', value: '`!messagelog status`\n`!messagelog off`', inline: false }).setColor(0xFF0000).setTimestamp()] });
     }
-
     if (!targetChannel.permissionsFor(message.guild.members.me).has(['SendMessages', 'EmbedLinks'])) {
       await message.react('❌').catch(() => {});
       return message.channel.send(`❌ Ich kann in ${targetChannel} keine Nachrichten / Embeds senden!`);
     }
-
-    // SCHRITT 1: HAKEN
     await message.react('✅').catch(() => {});
-
-    // SCHRITT 2: WARTEN
     await new Promise(r => setTimeout(r, 600));
-
-    // SCHRITT 3: SPEICHERN
     logChannels[message.guild.id] = targetChannel.id;
     saveLogChannels();
-
-    // SCHRITT 4: EMBED
     const successEmbed = new EmbedBuilder()
       .setTitle('✅ MESSAGE LOG AKTIVIERT')
       .setDescription(`Das Message Log wurde erfolgreich eingerichtet!\n\nAlle Nachrichten werden jetzt in ${targetChannel} geloggt.`)
@@ -586,16 +507,13 @@ client.on('messageCreate', async (message) => {
       .setThumbnail(client.user.displayAvatarURL())
       .setFooter({ text: 'BENI BOT • Message Log System • Made by Elyias' })
       .setTimestamp();
-
     await message.channel.send({ embeds: [successEmbed] });
-
     await targetChannel.send({ embeds: [new EmbedBuilder().setTitle('🔔 MESSAGE LOG TEST').setDescription('Das Message Log ist jetzt aktiv!\n\nAb jetzt werden hier alle gesendeten, bearbeiteten und gelöschten Nachrichten angezeigt.').addFields({ name: '📍 Server', value: message.guild.name, inline: true }, { name: '👤 Eingerichtet von', value: message.author.tag, inline: true }).setColor(0x00AAFF).setTimestamp()] }).catch(() => {});
-
   } catch (e) { console.log('Fehler bei !messagelog:', e); }
 });
 
 // ============================================================
-// 3. LOGGER - Loggt gesendet / bearbeitet / gelöscht
+// 3. LOGGER
 // ============================================================
 client.on('messageCreate', async (msg) => {
   try {
@@ -672,94 +590,36 @@ client.on('messageDelete', async (msg) => {
 });
 
 // ============================================================
-// BENI BOT - !partnership - PARTNERSCHAFTS SYSTEM
-// !partnership <discord.gg-Link>
+// !partnership
 // ============================================================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   if (!message.content.toLowerCase().startsWith('!partnership')) return;
-
   const args = message.content.split(' ');
   let inviteLink = args[1];
-
-  // Wenn kein Link angegeben -> Eigener Server
   if (!inviteLink) {
     await message.react('❌').catch(()=>{});
     return message.channel.send({ embeds: [new EmbedBuilder().setTitle('❌ KEIN LINK!').setDescription('Du musst einen Discord-Link angeben!\n\n**So geht\'s:**\n`!partnership https://discord.gg/deinserver`\n`!partnership discord.gg/deinserver`').setColor(0xFF0000).setTimestamp()] });
   }
-
   try {
     await message.react('✅').catch(()=>{});
     await new Promise(r => setTimeout(r, 500));
-
-    // Invite Code aus Link holen
     let code = inviteLink.replace('https://discord.gg/', '').replace('http://discord.gg/', '').replace('discord.gg/', '').replace('https://discord.com/invite/', '').split('/')[0].split('?')[0];
-
     let invite = null;
     try { invite = await client.fetchInvite(code); } catch(e) { invite = null; }
-
-    // FALLBACK: Wenn Link nicht abrufbar -> Nimm aktuellen Server
     const guildName = invite?.guild?.name || message.guild.name;
     const memberCount = invite?.approximate_member_count || message.guild.memberCount;
     const onlineCount = invite?.approximate_presence_count || '???';
     const guildIcon = invite?.guild?.iconURL({ dynamic: true, size: 512 }) || message.guild.iconURL({ dynamic: true, size: 512 }) || client.user.displayAvatarURL();
     const guildDesc = invite?.guild?.description || 'Ein cooler Discord Server - Join uns!';
     const inviter = message.author;
-
-    // ----- 4 VERSCHIEDENE PARTNERSCHAFTS-TEXTE - ZUFÄLLIG -----
     const partnershipTexts = [
-      // TEXT 1 - Hype Style
-      `🔥 **NEUE PARTNERSCHAFT!** 🔥\n\n` +
-      `Wir freuen uns riesig, euch unseren neuen Partner-Server vorzustellen!\n\n` +
-      `**🌟 ${guildName}**\n` +
-      `> ${guildDesc}\n\n` +
-      `**📊 Was dich erwartet:**\n` +
-      `👥 **${memberCount}** Member & wachsend!\n` +
-      `🟢 **${onlineCount}** gerade online\n` +
-      `🎮 Aktive Community, Events & Giveaways\n` +
-      `💬 Nette Leute & aktive Chats\n` +
-      `🤝 Respektvoller Umgang\n\n` +
-      `**👉 JOINE JETZT:**\n${inviteLink}\n\n` +
-      `*Partnerschaft mit ${message.guild.name} • Angefragt von ${inviter}*`,
-
-      // TEXT 2 - Chill Style
-      `✨ **PARTNERSCHAFT** ✨\n\n` +
-      `Hey Leute, wir haben einen neuen Partner! 🫶\n\n` +
-      `**💎 ${guildName}**\n` +
-      `> *${guildDesc}*\n\n` +
-      `Warum solltest du joinen?\n` +
-      `✅ Coole Community mit **${memberCount}** Membern\n` +
-      `✅ Täglich aktive Chats\n` +
-      `✅ Events, Giveaways & viel mehr\n` +
-      `✅ Super nette Mods & Owner\n\n` +
-      `**🔗 Hier geht's zum Server:**\n${inviteLink}\n\n` +
-      `Schaut gerne mal vorbei und sagt, dass ihr von **${message.guild.name}** kommt! 💙`,
-
-      // TEXT 3 - Professionell
-      `🤝 **OFFIZIELLE PARTNERSCHAFT** 🤝\n\n` +
-      `Wir begrüßen offiziell unseren neuen Partner-Server:\n\n` +
-      `**🏆 ${guildName}**\n\n` +
-      `**📝 Über den Server:**\n${guildDesc}\n\n` +
-      `**📈 Statistiken:**\n` +
-      `• 👥 Mitglieder: **${memberCount}**\n` +
-      `• 🟢 Online: **${onlineCount}**\n` +
-      `• 📅 Partnerschaft seit: <t:${Math.floor(Date.now()/1000)}:D>\n\n` +
-      `**🔗 Einladung:**\n${inviteLink}\n\n` +
-      `*Wir freuen uns auf eine lange und erfolgreiche Partnerschaft!*\n*— Team ${message.guild.name}*`,
-
-      // TEXT 4 - Kurz & Knackig
-      `🚀 **PARTNER ALERT!** 🚀\n\n` +
-      `**${guildName}** ist jetzt offizieller Partner von **${message.guild.name}**!\n\n` +
-      `👥 ${memberCount} Member | 🟢 ${onlineCount} Online\n` +
-      `💬 ${guildDesc}\n\n` +
-      `**JOIN:** ${inviteLink}\n\n` +
-      `Lasst Liebe da! ❤️🔥`
+      `🔥 **NEUE PARTNERSCHAFT!** 🔥\n\nWir freuen uns riesig, euch unseren neuen Partner-Server vorzustellen!\n\n**🌟 ${guildName}**\n> ${guildDesc}\n\n**📊 Was dich erwartet:**\n👥 **${memberCount}** Member & wachsend!\n🟢 **${onlineCount}** gerade online\n🎮 Aktive Community, Events & Giveaways\n💬 Nette Leute & aktive Chats\n🤝 Respektvoller Umgang\n\n**👉 JOINE JETZT:**\n${inviteLink}\n\n*Partnerschaft mit ${message.guild.name} • Angefragt von ${inviter}*`,
+      `✨ **PARTNERSCHAFT** ✨\n\nHey Leute, wir haben einen neuen Partner! 🫶\n\n**💎 ${guildName}**\n> *${guildDesc}*\n\nWarum solltest du joinen?\n✅ Coole Community mit **${memberCount}** Membern\n✅ Täglich aktive Chats\n✅ Events, Giveaways & viel mehr\n✅ Super nette Mods & Owner\n\n**🔗 Hier geht's zum Server:**\n${inviteLink}\n\nSchaut gerne mal vorbei und sagt, dass ihr von **${message.guild.name}** kommt! 💙`,
+      `🤝 **OFFIZIELLE PARTNERSCHAFT** 🤝\n\nWir begrüßen offiziell unseren neuen Partner-Server:\n\n**🏆 ${guildName}**\n\n**📝 Über den Server:**\n${guildDesc}\n\n**📈 Statistiken:**\n• 👥 Mitglieder: **${memberCount}**\n• 🟢 Online: **${onlineCount}**\n• 📅 Partnerschaft seit: <t:${Math.floor(Date.now()/1000)}:D>\n\n**🔗 Einladung:**\n${inviteLink}\n\n*Wir freuen uns auf eine lange und erfolgreiche Partnerschaft!*\n*— Team ${message.guild.name}*`,
+      `🚀 **PARTNER ALERT!** 🚀\n\n**${guildName}** ist jetzt offizieller Partner von **${message.guild.name}**!\n\n👥 ${memberCount} Member | 🟢 ${onlineCount} Online\n💬 ${guildDesc}\n\n**JOIN:** ${inviteLink}\n\nLasst Liebe da! ❤️🔥`
     ];
-
-    // Zufälligen Text wählen
     const randomText = partnershipTexts[Math.floor(Math.random() * partnershipTexts.length)];
-
-    // ----- EMBED -----
     const partnerEmbed = new EmbedBuilder()
       .setTitle(`🤝 PARTNERSCHAFT - ${guildName}`)
       .setDescription(randomText)
@@ -776,68 +636,79 @@ client.on('messageCreate', async (message) => {
       .setImage(guildIcon)
       .setFooter({ text: `BENI BOT • Partnership System • ${message.guild.name} x ${guildName}` })
       .setTimestamp();
-
     const partnerButtons = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder().setLabel(`🚀 ${guildName} joinen`).setStyle(ButtonStyle.Link).setURL(inviteLink.startsWith('http') ? inviteLink : `https://${inviteLink}`),
         new ButtonBuilder().setLabel('💬 Support').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH')
       );
-
-    // ----- SENDEN -----
     await message.channel.send({ content: `||@everyone||\n**Neue Partnerschaft!** 🎉`, embeds: [partnerEmbed], components: [partnerButtons] });
-
-    // Extra: Reiner Text zum Kopieren für Partner-Channel
     await message.channel.send({ content: `**📋 KOPIER-TEXT FÜR DEINEN PARTNER-CHANNEL:**\n\`\`\`\n${randomText.replace(/\*\*/g, '').replace(/__/g, '')}\n\`\`\`` }).catch(()=>{});
-
   } catch (e) {
+    console.log('Fehler bei !partnership:', e);
+  }
+});
 
+// ============================================================
+// !stats - JETZT RICHTIG GETRENNT!
+// ============================================================
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  
-  if (message.content === '!stats') {
-    try {
-      const totalServers = client.guilds.cache.size;
-      let totalUsers = 0;
-      client.guilds.cache.forEach(g => {
-        totalUsers += g.memberCount || 0;
-      });
-
-     client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-
-  if (message.content === '!as') {
-    // 1. HAKEN REAKTION auf deine Nachricht
-    try {
-      await message.react('✅');
-    } catch (e) {
-      console.log('Konnte nicht reagieren:', e);
-    }
-
+  if (message.content !== '!stats') return;
+  try {
+    const totalServers = client.guilds.cache.size;
     let totalUsers = 0;
     client.guilds.cache.forEach(g => {
       totalUsers += g.memberCount || 0;
     });
-    const totalServers = client.guilds.cache.size;
-
-    const topServers = [...client.guilds.cache.values()]
-      .sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0))
-      .slice(0, 5)
-      .map((g, i) => `**${i + 1}.** ${g.name} - ${g.memberCount} User`)
-      .join('\n') || 'Keine Server';
-
-    const asEmbed = new EmbedBuilder()
-      .setTitle('📊 BENI - SERVER STATS')
+    const statsEmbed = new EmbedBuilder()
+      .setTitle('📊 BENI - STATS')
       .setColor('#00FF00')
       .setDescription(`**Beni ist auf ${totalServers} Servern aktiv!**`)
       .addFields(
         { name: '🖥️ Server', value: `${totalServers}`, inline: true },
         { name: '👥 User Total', value: `${totalUsers}`, inline: true },
-        { name: '📶 Ping', value: `${client.ws.ping}ms`, inline: true },
-        { name: '🏆 Top 5 Server', value: topServers, inline: false }
+        { name: '📶 Ping', value: `${client.ws.ping}ms`, inline: true }
       )
-      .setFooter({ text: 'Beni Bot • !as' })
+      .setFooter({ text: 'Beni Bot • !stats' })
       .setTimestamp();
-
-    await message.reply({ embeds: [asEmbed] });
+    await message.reply({ embeds: [statsEmbed] });
+  } catch (e) {
+    console.log('Fehler bei !stats:', e);
   }
+});
+
+// ============================================================
+// !as - JETZT RICHTIG GETRENNT!
+// ============================================================
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (message.content !== '!as') return;
+  try {
+    await message.react('✅');
+  } catch (e) {
+    console.log('Konnte nicht reagieren:', e);
+  }
+  let totalUsers = 0;
+  client.guilds.cache.forEach(g => {
+    totalUsers += g.memberCount || 0;
+  });
+  const totalServers = client.guilds.cache.size;
+  const topServers = [...client.guilds.cache.values()]
+    .sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0))
+    .slice(0, 5)
+    .map((g, i) => `**${i + 1}.** ${g.name} - ${g.memberCount} User`)
+    .join('\n') || 'Keine Server';
+  const asEmbed = new EmbedBuilder()
+    .setTitle('📊 BENI - SERVER STATS')
+    .setColor('#00FF00')
+    .setDescription(`**Beni ist auf ${totalServers} Servern aktiv!**`)
+    .addFields(
+      { name: '🖥️ Server', value: `${totalServers}`, inline: true },
+      { name: '👥 User Total', value: `${totalUsers}`, inline: true },
+      { name: '📶 Ping', value: `${client.ws.ping}ms`, inline: true },
+      { name: '🏆 Top 5 Server', value: topServers, inline: false }
+    )
+    .setFooter({ text: 'Beni Bot • !as' })
+    .setTimestamp();
+  await message.reply({ embeds: [asEmbed] });
 });
