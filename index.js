@@ -841,3 +841,4 @@ client.on('messageCreate', async (message) => {
     await message.reply({ embeds: [asEmbed] });
   }
 });
+client.login(process.env.DISCORD_TOKEN);
