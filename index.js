@@ -802,4 +802,42 @@ client.on('messageCreate', async (message) => {
         totalUsers += g.memberCount || 0;
       });
 
-     
+     client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+
+  if (message.content === '!as') {
+    // 1. HAKEN REAKTION auf deine Nachricht
+    try {
+      await message.react('✅');
+    } catch (e) {
+      console.log('Konnte nicht reagieren:', e);
+    }
+
+    let totalUsers = 0;
+    client.guilds.cache.forEach(g => {
+      totalUsers += g.memberCount || 0;
+    });
+    const totalServers = client.guilds.cache.size;
+
+    const topServers = [...client.guilds.cache.values()]
+      .sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0))
+      .slice(0, 5)
+      .map((g, i) => `**${i + 1}.** ${g.name} - ${g.memberCount} User`)
+      .join('\n') || 'Keine Server';
+
+    const asEmbed = new EmbedBuilder()
+      .setTitle('📊 BENI - SERVER STATS')
+      .setColor('#00FF00')
+      .setDescription(`**Beni ist auf ${totalServers} Servern aktiv!**`)
+      .addFields(
+        { name: '🖥️ Server', value: `${totalServers}`, inline: true },
+        { name: '👥 User Total', value: `${totalUsers}`, inline: true },
+        { name: '📶 Ping', value: `${client.ws.ping}ms`, inline: true },
+        { name: '🏆 Top 5 Server', value: topServers, inline: false }
+      )
+      .setFooter({ text: 'Beni Bot • !as' })
+      .setTimestamp();
+
+    await message.reply({ embeds: [asEmbed] });
+  }
+});
