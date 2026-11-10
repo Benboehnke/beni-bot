@@ -670,3 +670,127 @@ client.on('messageDelete', async (msg) => {
     await logCh.send({ embeds: [embed] });
   } catch (e) {}
 });
+
+// ============================================================
+// BENI BOT - !partnership - PARTNERSCHAFTS SYSTEM
+// !partnership <discord.gg-Link>
+// ============================================================
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  if (!message.content.toLowerCase().startsWith('!partnership')) return;
+
+  const args = message.content.split(' ');
+  let inviteLink = args[1];
+
+  // Wenn kein Link angegeben -> Eigener Server
+  if (!inviteLink) {
+    await message.react('❌').catch(()=>{});
+    return message.channel.send({ embeds: [new EmbedBuilder().setTitle('❌ KEIN LINK!').setDescription('Du musst einen Discord-Link angeben!\n\n**So geht\'s:**\n`!partnership https://discord.gg/deinserver`\n`!partnership discord.gg/deinserver`').setColor(0xFF0000).setTimestamp()] });
+  }
+
+  try {
+    await message.react('✅').catch(()=>{});
+    await new Promise(r => setTimeout(r, 500));
+
+    // Invite Code aus Link holen
+    let code = inviteLink.replace('https://discord.gg/', '').replace('http://discord.gg/', '').replace('discord.gg/', '').replace('https://discord.com/invite/', '').split('/')[0].split('?')[0];
+
+    let invite = null;
+    try { invite = await client.fetchInvite(code); } catch(e) { invite = null; }
+
+    // FALLBACK: Wenn Link nicht abrufbar -> Nimm aktuellen Server
+    const guildName = invite?.guild?.name || message.guild.name;
+    const memberCount = invite?.approximate_member_count || message.guild.memberCount;
+    const onlineCount = invite?.approximate_presence_count || '???';
+    const guildIcon = invite?.guild?.iconURL({ dynamic: true, size: 512 }) || message.guild.iconURL({ dynamic: true, size: 512 }) || client.user.displayAvatarURL();
+    const guildDesc = invite?.guild?.description || 'Ein cooler Discord Server - Join uns!';
+    const inviter = message.author;
+
+    // ----- 4 VERSCHIEDENE PARTNERSCHAFTS-TEXTE - ZUFÄLLIG -----
+    const partnershipTexts = [
+      // TEXT 1 - Hype Style
+      `🔥 **NEUE PARTNERSCHAFT!** 🔥\n\n` +
+      `Wir freuen uns riesig, euch unseren neuen Partner-Server vorzustellen!\n\n` +
+      `**🌟 ${guildName}**\n` +
+      `> ${guildDesc}\n\n` +
+      `**📊 Was dich erwartet:**\n` +
+      `👥 **${memberCount}** Member & wachsend!\n` +
+      `🟢 **${onlineCount}** gerade online\n` +
+      `🎮 Aktive Community, Events & Giveaways\n` +
+      `💬 Nette Leute & aktive Chats\n` +
+      `🤝 Respektvoller Umgang\n\n` +
+      `**👉 JOINE JETZT:**\n${inviteLink}\n\n` +
+      `*Partnerschaft mit ${message.guild.name} • Angefragt von ${inviter}*`,
+
+      // TEXT 2 - Chill Style
+      `✨ **PARTNERSCHAFT** ✨\n\n` +
+      `Hey Leute, wir haben einen neuen Partner! 🫶\n\n` +
+      `**💎 ${guildName}**\n` +
+      `> *${guildDesc}*\n\n` +
+      `Warum solltest du joinen?\n` +
+      `✅ Coole Community mit **${memberCount}** Membern\n` +
+      `✅ Täglich aktive Chats\n` +
+      `✅ Events, Giveaways & viel mehr\n` +
+      `✅ Super nette Mods & Owner\n\n` +
+      `**🔗 Hier geht's zum Server:**\n${inviteLink}\n\n` +
+      `Schaut gerne mal vorbei und sagt, dass ihr von **${message.guild.name}** kommt! 💙`,
+
+      // TEXT 3 - Professionell
+      `🤝 **OFFIZIELLE PARTNERSCHAFT** 🤝\n\n` +
+      `Wir begrüßen offiziell unseren neuen Partner-Server:\n\n` +
+      `**🏆 ${guildName}**\n\n` +
+      `**📝 Über den Server:**\n${guildDesc}\n\n` +
+      `**📈 Statistiken:**\n` +
+      `• 👥 Mitglieder: **${memberCount}**\n` +
+      `• 🟢 Online: **${onlineCount}**\n` +
+      `• 📅 Partnerschaft seit: <t:${Math.floor(Date.now()/1000)}:D>\n\n` +
+      `**🔗 Einladung:**\n${inviteLink}\n\n` +
+      `*Wir freuen uns auf eine lange und erfolgreiche Partnerschaft!*\n*— Team ${message.guild.name}*`,
+
+      // TEXT 4 - Kurz & Knackig
+      `🚀 **PARTNER ALERT!** 🚀\n\n` +
+      `**${guildName}** ist jetzt offizieller Partner von **${message.guild.name}**!\n\n` +
+      `👥 ${memberCount} Member | 🟢 ${onlineCount} Online\n` +
+      `💬 ${guildDesc}\n\n` +
+      `**JOIN:** ${inviteLink}\n\n` +
+      `Lasst Liebe da! ❤️🔥`
+    ];
+
+    // Zufälligen Text wählen
+    const randomText = partnershipTexts[Math.floor(Math.random() * partnershipTexts.length)];
+
+    // ----- EMBED -----
+    const partnerEmbed = new EmbedBuilder()
+      .setTitle(`🤝 PARTNERSCHAFT - ${guildName}`)
+      .setDescription(randomText)
+      .addFields(
+        { name: '🏠 Partner Server', value: `**${guildName}**`, inline: true },
+        { name: '👥 Member', value: `**${memberCount}**`, inline: true },
+        { name: '🟢 Online', value: `**${onlineCount}**`, inline: true },
+        { name: '👤 Partnerschaft von', value: `${inviter}`, inline: true },
+        { name: '📅 Seit', value: `<t:${Math.floor(Date.now()/1000)}:D>`, inline: true },
+        { name: '🔗 Link', value: `[Klicke hier zum Joinen](${inviteLink})`, inline: true }
+      )
+      .setColor(0xFF00AA)
+      .setThumbnail(guildIcon)
+      .setImage(guildIcon)
+      .setFooter({ text: `BENI BOT • Partnership System • ${message.guild.name} x ${guildName}` })
+      .setTimestamp();
+
+    const partnerButtons = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder().setLabel(`🚀 ${guildName} joinen`).setStyle(ButtonStyle.Link).setURL(inviteLink.startsWith('http') ? inviteLink : `https://${inviteLink}`),
+        new ButtonBuilder().setLabel('💬 Support').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH')
+      );
+
+    // ----- SENDEN -----
+    await message.channel.send({ content: `||@everyone||\n**Neue Partnerschaft!** 🎉`, embeds: [partnerEmbed], components: [partnerButtons] });
+
+    // Extra: Reiner Text zum Kopieren für Partner-Channel
+    await message.channel.send({ content: `**📋 KOPIER-TEXT FÜR DEINEN PARTNER-CHANNEL:**\n\`\`\`\n${randomText.replace(/\*\*/g, '').replace(/__/g, '')}\n\`\`\`` }).catch(()=>{});
+
+  } catch (e) {
+    console.log('Fehler bei !partnership:', e);
+    await message.channel.send('❌ Der Link konnte nicht gelesen werden! Check ob der Link gültig ist.');
+  }
+});
