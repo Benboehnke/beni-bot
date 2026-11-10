@@ -791,79 +791,32 @@ client.on('messageCreate', async (message) => {
 
   } catch (e) {
 
-    // ============================================================
-// BENI BOT - !as - AUF WIE VIELEN SERVERN IST BENI?
-// !as / !server / !servers / !stats
-// ============================================================
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  const cmd = message.content.toLowerCase().split(' ')[0];
-  if (cmd !== '!as' && cmd !== '!server' && cmd !== '!servers' && cmd !== '!stats' && cmd !== '!servercount') return;
+  
+  if (message.content === '!stats') {
+    try {
+      const totalServers = client.guilds.cache.size;
+      let totalUsers = 0;
+      client.guilds.cache.forEach(g => {
+        totalUsers += g.memberCount || 0;
+      });
 
-  try {
-    await message.react('✅').catch(()=>{});
-    await new Promise(r => setTimeout(r, 400));
+      const embed = new EmbedBuilder()
+        .setTitle('📊 BENI STATS')
+        .setColor('#00FF00')
+        .setDescription(`**Beni ist auf ${totalServers} Servern!**`)
+        .addFields(
+          { name: '🖥️ Server', value: `${totalServers}`, inline: true },
+          { name: '👥 User', value: `${totalUsers}`, inline: true },
+          { name: '📶 Ping', value: `${client.ws.ping}ms`, inline: true }
+        )
+        .setFooter({ text: 'Beni Bot • Stats' });
 
-    // ----- DATEN HOLEN -----
-    const serverCount = client.guilds.cache.size;
-    let totalMembers = 0;
-    let totalChannels = 0;
-    client.guilds.cache.forEach(g => {
-      totalMembers += g.memberCount || 0;
-      totalChannels += g.channels.cache.size || 0;
-    });
-
-    // Top 5 größte Server
-    const topServers = [...client.guilds.cache.values()]
-      .sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0))
-      .slice(0, 5)
-      .map((g, i) => {
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🏅';
-        return `${medal} **${g.name}** - \`${g.memberCount} Member\``;
-      }).join('\n') || 'Keine Server gefunden';
-
-    // Uptime
-    const uptimeMs = client.uptime || 0;
-    const uptimeHours = Math.floor(uptimeMs / 3600000);
-    const uptimeMins = Math.floor((uptimeMs % 3600000) / 60000);
-    const uptimeText = `${uptimeHours}h ${uptimeMins}m`;
-
-    // Ping
-    const ping = client.ws.ping;
-
-    const asEmbed = new EmbedBuilder()
-      .setTitle(`🌐 BENI BOT IST AUF ${serverCount} SERVERN!`)
-      .setDescription(
-        `Beni Bot wächst immer weiter! Danke an alle Server, die Beni Bot nutzen! ❤️\n\n` +
-        `**Dein Server ist einer davon!**`
-      )
-      .addFields(
-        { name: '🖥️ SERVER', value: `**${serverCount}** Server`, inline: true },
-        { name: '👥 USER GESAMT', value: `**${totalMembers.toLocaleString('de-DE')}** User`, inline: true },
-        { name: '💬 CHANNELS GESAMT', value: `**${totalChannels}** Channels`, inline: true },
-        { name: '📶 PING', value: `**${ping}ms**`, inline: true },
-        { name: '⏰ UPTIME', value: `**${uptimeText}**`, inline: true },
-        { name: '📦 VERSION', value: `**v2.0**`, inline: true },
-        { name: '🏆 TOP 5 GRÖSSTE SERVER', value: topServers, inline: false },
-        { name: '📍 DEIN SERVER', value: `**${message.guild.name}**\n👥 ${message.guild.memberCount} Member\n🆔 \`${message.guild.id}\``, inline: false }
-      )
-      .setColor(0x00AAFF)
-      .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 512 }))
-      .setFooter({ text: `BENI BOT • Made by Elyias • Auf ${serverCount} Servern aktiv!` })
-      .setTimestamp();
-
-    const asButtons = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder().setLabel('🌐 Dashboard').setStyle(ButtonStyle.Link).setURL('https://beni-bot-dashboard.netlify.app/'),
-        new ButtonBuilder().setLabel('➕ Bot hinzufügen').setStyle(ButtonStyle.Link).setURL('https://discord.com/oauth2/authorize?client_id=1568252045574668298&permissions=8&scope=bot%20applications.commands'),
-        new ButtonBuilder().setLabel('💬 Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH')
-      );
-
-    await message.channel.send({ embeds: [asEmbed], components: [asButtons] });
-
-  } catch(e) { console.log('Fehler bei !as:', e); }
-});
-    console.log('Fehler bei !partnership:', e);
-    await message.channel.send('❌ Der Link konnte nicht gelesen werden! Check ob der Link gültig ist.');
+      await message.reply({ embeds: [embed] });
+    } catch (e) {
+      console.log('STATS FEHLER:', e);
+      message.reply('Fehler bei Stats Bro!');
+    }
   }
 });
