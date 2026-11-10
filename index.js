@@ -802,21 +802,4 @@ client.on('messageCreate', async (message) => {
         totalUsers += g.memberCount || 0;
       });
 
-      const embed = new EmbedBuilder()
-        .setTitle('📊 BENI STATS')
-        .setColor('#00FF00')
-        .setDescription(`**Beni ist auf ${totalServers} Servern!**`)
-        .addFields(
-          { name: '🖥️ Server', value: `${totalServers}`, inline: true },
-          { name: '👥 User', value: `${totalUsers}`, inline: true },
-          { name: '📶 Ping', value: `${client.ws.ping}ms`, inline: true }
-        )
-        .setFooter({ text: 'Beni Bot • Stats' });
-
-      await message.reply({ embeds: [embed] });
-    } catch (e) {
-      console.log('STATS FEHLER:', e);
-      message.reply('Fehler bei Stats Bro!');
-    }
-  }
-});
+     
