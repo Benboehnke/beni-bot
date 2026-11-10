@@ -422,3 +422,251 @@ fetch('https://discord.com/api/v10/users/@me', {
   console.log('HTTPS TEST Status:', r.status);
   console.log('HTTPS TEST Antwort:', (await r.text()).slice(0, 200));
 }).catch(e => console.log('HTTPS TEST FEHLER:', e.message));
+
+
+// ============================================================
+// BENI BOT - UNTEN DRAN MACHEN - BEIDE COMMANDS
+// !dashboard + !messagelog
+// Ablauf: ✅ Haken -> dann erst Embed
+// ============================================================
+const fs = require('fs');
+
+// ---------- MESSAGELOG SPEICHER ----------
+let logChannels = {};
+if (fs.existsSync('./logchannels.json')) {
+  try { logChannels = JSON.parse(fs.readFileSync('./logchannels.json', 'utf8')); } catch (e) { logChannels = {}; }
+}
+function saveLogChannels() {
+  fs.writeFileSync('./logchannels.json', JSON.stringify(logChannels, null, 2));
+}
+
+// ============================================================
+// 1. !dashboard
+// ============================================================
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (message.content.toLowerCase() !== '!dashboard' && message.content.toLowerCase() !== '!dash' && message.content.toLowerCase() !== '!website' && message.content.toLowerCase() !== '!web') return;
+
+  try {
+    // SCHRITT 1: HAKEN
+    await message.react('✅').catch(() => {});
+
+    // SCHRITT 2: WARTEN
+    await new Promise(r => setTimeout(r, 500));
+
+    // SCHRITT 3: EMBED
+    const dashboardEmbed = new EmbedBuilder()
+      .setTitle('🌐 BENI BOT - OFFICIAL DASHBOARD')
+      .setDescription(
+        'Willkommen im offiziellen Dashboard von **Beni Bot**!\n\n' +
+        'Hier kannst du alles rund um Beni Bot sehen, testen und verwalten.\n' +
+        'Das Dashboard ist **100% kostenlos** und für jeden zugänglich.\n\n' +
+        '👇 **Klick unten auf den Link, um das Dashboard zu öffnen!**'
+      )
+      .addFields(
+        {
+          name: '🔗 DASHBOARD LINK',
+          value: '[**➡️ KLICKE HIER - BENI BOT DASHBOARD ÖFFNEN ⬅️**](https://beni-bot-dashboard.netlify.app/)\n\n`https://beni-bot-dashboard.netlify.app/`',
+          inline: false
+        },
+        {
+          name: '📜 WAS KANNST DU AUF DEM DASHBOARD MACHEN?',
+          value:
+            '🔒 **Mit Discord einloggen** - Sicher mit deinem Discord Account\n' +
+            '📜 **Alle Commands sehen** - Alle Befehle auf einen Blick\n' +
+            '🎮 **Live Chat Simulator** - Teste Beni Bot direkt auf der Website\n' +
+            '🕹️ **Mini-Game spielen** - Klick den Beni und knack den Highscore\n' +
+            '⭐ **Bot bewerten** - Gib Beni Bot Sterne und Feedback\n' +
+            '🏆 **Top Server sehen** - Welche Server nutzen Beni Bot?\n' +
+            '📢 **Neuigkeiten & Updates** - Immer auf dem neuesten Stand bleiben',
+          inline: false
+        },
+        {
+          name: '📊 BENI BOT STATS',
+          value: '• **Uptime:** 99.9%\n• **Ping:** Schnell & Stabil\n• **Version:** v2.0 - Dashboard Update\n• **Status:** Online',
+          inline: true
+        },
+        {
+          name: '👑 MADE BY',
+          value: '**Elyias**\nFounder & Developer\nvon Beni Bot',
+          inline: true
+        },
+        {
+          name: '💡 TIPP',
+          value: 'Wenn du Beni Bot noch nicht auf deinem Server hast, kannst du ihn direkt über das Dashboard zu deinem Server hinzufügen!',
+          inline: false
+        }
+      )
+      .setColor(0x00AAFF)
+      .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 512 }))
+      .setFooter({ text: 'BENI BOT • Dashboard • Made by Elyias', iconURL: client.user.displayAvatarURL() })
+      .setTimestamp();
+
+    const dashboardButtons = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder().setLabel('🌐 Dashboard öffnen').setStyle(ButtonStyle.Link).setURL('https://beni-bot-dashboard.netlify.app/'),
+        new ButtonBuilder().setLabel('➕ Bot hinzufügen').setStyle(ButtonStyle.Link).setURL('https://discord.com/oauth2/authorize?client_id=1568252045574668298&permissions=8&scope=bot%20applications.commands'),
+        new ButtonBuilder().setLabel('💬 Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH')
+      );
+
+    // SCHRITT 4: SENDEN - BLEIBT STEHEN!
+    await message.channel.send({ embeds: [dashboardEmbed], components: [dashboardButtons] });
+
+  } catch (e) { console.log('Fehler bei !dashboard:', e); }
+});
+
+// ============================================================
+// 2. !messagelog #channel
+// ============================================================
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.content.toLowerCase().startsWith('!messagelog')) return;
+
+  // ----- !messagelog off -----
+  if (message.content.toLowerCase() === '!messagelog off') {
+    await message.react('✅').catch(() => {});
+    await new Promise(r => setTimeout(r, 400));
+    if (!logChannels[message.guild.id]) {
+      return message.channel.send({ embeds: [new EmbedBuilder().setTitle('⚠️ MESSAGE LOG - NICHT AKTIV').setDescription('Message Log war gar nicht aktiviert.\nAktiviere es mit: `!messagelog #channel`').setColor(0xFFAA00).setTimestamp()] });
+    }
+    delete logChannels[message.guild.id];
+    saveLogChannels();
+    return message.channel.send({ embeds: [new EmbedBuilder().setTitle('❌ MESSAGE LOG DEAKTIVIERT').setDescription('Es werden ab jetzt **keine** Nachrichten mehr geloggt.').addFields({ name: '👤 Deaktiviert von', value: `${message.author}`, inline: true }, { name: '🔁 Wieder aktivieren', value: '`!messagelog #channel`', inline: true }).setColor(0xFF0000).setFooter({ text: 'BENI BOT • Message Log System' }).setTimestamp()] });
+  }
+
+  // ----- !messagelog status -----
+  if (message.content.toLowerCase() === '!messagelog status') {
+    await message.react('✅').catch(() => {});
+    await new Promise(r => setTimeout(r, 400));
+    const currentId = logChannels[message.guild.id];
+    if (!currentId) return message.channel.send('⚠️ Message Log ist **nicht** aktiviert.\nAktiviere mit: `!messagelog #channel`');
+    const ch = message.guild.channels.cache.get(currentId);
+    return message.channel.send(`✅ Message Log ist aktiv in: ${ch ? ch : 'Unbekannter Channel'}`);
+  }
+
+  // ----- !messagelog #channel -----
+  try {
+    if (!message.member.permissions.has('Administrator')) {
+      await message.react('❌').catch(() => {});
+      return message.channel.send({ embeds: [new EmbedBuilder().setTitle('❌ KEINE BERECHTIGUNG').setDescription('Du brauchst **Administrator** Rechte!').setColor(0xFF0000).setTimestamp()] });
+    }
+
+    const targetChannel = message.mentions.channels.first();
+    if (!targetChannel) {
+      await message.react('❌').catch(() => {});
+      return message.channel.send({ embeds: [new EmbedBuilder().setTitle('❌ FALSCHE BENUTZUNG').setDescription('Du musst einen Channel angeben!').addFields({ name: '✅ Richtig', value: '`!messagelog #logs`', inline: false }, { name: '⚙️ Weitere Befehle', value: '`!messagelog status`\n`!messagelog off`', inline: false }).setColor(0xFF0000).setTimestamp()] });
+    }
+
+    if (!targetChannel.permissionsFor(message.guild.members.me).has(['SendMessages', 'EmbedLinks'])) {
+      await message.react('❌').catch(() => {});
+      return message.channel.send(`❌ Ich kann in ${targetChannel} keine Nachrichten / Embeds senden!`);
+    }
+
+    // SCHRITT 1: HAKEN
+    await message.react('✅').catch(() => {});
+
+    // SCHRITT 2: WARTEN
+    await new Promise(r => setTimeout(r, 600));
+
+    // SCHRITT 3: SPEICHERN
+    logChannels[message.guild.id] = targetChannel.id;
+    saveLogChannels();
+
+    // SCHRITT 4: EMBED
+    const successEmbed = new EmbedBuilder()
+      .setTitle('✅ MESSAGE LOG AKTIVIERT')
+      .setDescription(`Das Message Log wurde erfolgreich eingerichtet!\n\nAlle Nachrichten werden jetzt in ${targetChannel} geloggt.`)
+      .addFields(
+        { name: '📤 WAS WIRD GELOGGT?', value: '• **Gesendete Nachrichten**\n• **Bearbeitete Nachrichten** - Vorher / Nachher\n• **Gelöschte Nachrichten**\n• **Bilder & Dateien**', inline: false },
+        { name: '📍 LOG CHANNEL', value: `${targetChannel}`, inline: true },
+        { name: '👤 EINGERICHTET VON', value: `${message.author}`, inline: true },
+        { name: '⚙️ BEFEHLE', value: '`!messagelog status`\n`!messagelog off`', inline: false }
+      )
+      .setColor(0x00FF88)
+      .setThumbnail(client.user.displayAvatarURL())
+      .setFooter({ text: 'BENI BOT • Message Log System • Made by Elyias' })
+      .setTimestamp();
+
+    await message.channel.send({ embeds: [successEmbed] });
+
+    await targetChannel.send({ embeds: [new EmbedBuilder().setTitle('🔔 MESSAGE LOG TEST').setDescription('Das Message Log ist jetzt aktiv!\n\nAb jetzt werden hier alle gesendeten, bearbeiteten und gelöschten Nachrichten angezeigt.').addFields({ name: '📍 Server', value: message.guild.name, inline: true }, { name: '👤 Eingerichtet von', value: message.author.tag, inline: true }).setColor(0x00AAFF).setTimestamp()] }).catch(() => {});
+
+  } catch (e) { console.log('Fehler bei !messagelog:', e); }
+});
+
+// ============================================================
+// 3. LOGGER - Loggt gesendet / bearbeitet / gelöscht
+// ============================================================
+client.on('messageCreate', async (msg) => {
+  try {
+    if (msg.author.bot) return;
+    if (!msg.guild) return;
+    if (msg.content.toLowerCase().startsWith('!messagelog') || msg.content.toLowerCase().startsWith('!dashboard')) return;
+    const logId = logChannels[msg.guild.id];
+    if (!logId) return;
+    if (msg.channel.id === logId) return;
+    const logCh = msg.guild.channels.cache.get(logId);
+    if (!logCh) return;
+    const embed = new EmbedBuilder()
+      .setTitle('📤 Nachricht gesendet')
+      .addFields(
+        { name: '👤 User', value: `${msg.author} - \`${msg.author.tag}\``, inline: true },
+        { name: '📍 Channel', value: `${msg.channel}`, inline: true },
+        { name: '💬 Inhalt', value: msg.content ? msg.content.slice(0, 1000) : '*Keine Text-Nachricht (Bild / Datei)*', inline: false },
+        { name: '🔗 Link', value: `[Zur Nachricht springen](https://discord.com/channels/${msg.guild.id}/${msg.channel.id}/${msg.id})`, inline: false }
+      )
+      .setColor(0x00AAFF)
+      .setThumbnail(msg.author.displayAvatarURL())
+      .setFooter({ text: `User ID: ${msg.author.id} | Message ID: ${msg.id}` })
+      .setTimestamp();
+    await logCh.send({ embeds: [embed] });
+  } catch (e) {}
+});
+
+client.on('messageUpdate', async (oldMsg, newMsg) => {
+  try {
+    if (!oldMsg.guild) return;
+    if (oldMsg.author?.bot) return;
+    if (oldMsg.content === newMsg.content) return;
+    const logId = logChannels[oldMsg.guild.id];
+    if (!logId) return;
+    const logCh = oldMsg.guild.channels.cache.get(logId);
+    if (!logCh) return;
+    const embed = new EmbedBuilder()
+      .setTitle('✏️ Nachricht bearbeitet')
+      .addFields(
+        { name: '👤 User', value: `${oldMsg.author} - \`${oldMsg.author.tag}\``, inline: true },
+        { name: '📍 Channel', value: `${oldMsg.channel}`, inline: true },
+        { name: '🔴 VORHER', value: oldMsg.content ? oldMsg.content.slice(0, 1000) : '*Leer*', inline: false },
+        { name: '🟢 NACHHER', value: newMsg.content ? newMsg.content.slice(0, 1000) : '*Leer*', inline: false }
+      )
+      .setColor(0xFFAA00)
+      .setThumbnail(oldMsg.author.displayAvatarURL())
+      .setFooter({ text: `User ID: ${oldMsg.author.id} | Message ID: ${oldMsg.id}` })
+      .setTimestamp();
+    await logCh.send({ embeds: [embed] });
+  } catch (e) {}
+});
+
+client.on('messageDelete', async (msg) => {
+  try {
+    if (!msg.guild) return;
+    if (msg.author?.bot) return;
+    const logId = logChannels[msg.guild.id];
+    if (!logId) return;
+    const logCh = msg.guild.channels.cache.get(logId);
+    if (!logCh) return;
+    const embed = new EmbedBuilder()
+      .setTitle('🗑️ Nachricht gelöscht')
+      .addFields(
+        { name: '👤 User', value: msg.author ? `${msg.author} - \`${msg.author.tag}\`` : 'Unbekannt', inline: true },
+        { name: '📍 Channel', value: `${msg.channel}`, inline: true },
+        { name: '💬 Gelöschter Inhalt', value: msg.content ? msg.content.slice(0, 1000) : '*Keine Text-Nachricht*', inline: false }
+      )
+      .setColor(0xFF0000)
+      .setThumbnail(msg.author?.displayAvatarURL())
+      .setFooter({ text: `User ID: ${msg.author?.id} | Message ID: ${msg.id}` })
+      .setTimestamp();
+    await logCh.send({ embeds: [embed] });
+  } catch (e) {}
+});
