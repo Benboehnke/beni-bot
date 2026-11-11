@@ -807,3 +807,112 @@ client.on('messageCreate', async (message) => {
     }
   }
 });
+
+// ===== BANNER / AVATAR / HISTORY =====
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  const args = message.content.trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  // ----- !banner -----
+  if (command === '!banner') {
+    const target = message.mentions.users.first() || message.author;
+    // Banner muss frisch geladen werden, sonst ist es null
+    const fetched = await client.users.fetch(target.id, { force: true }).catch(() => target);
+    const bannerUrl = fetched.bannerURL({ size: 1024, extension: 'png' });
+
+    if (!bannerUrl) return fail(message, `${target.username} hat **kein Banner** gesetzt!`);
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🖼️ Banner von ${target.username}`)
+      .setImage(bannerUrl)
+      .setColor(0x5865F2)
+      .addFields(
+        { name: '👤 User', value: `${target} - \`${target.tag}\``, inline: true },
+        { name: '🆔 ID', value: `\`${target.id}\``, inline: true },
+        { name: '🔗 Link', value: `[Banner öffnen](${bannerUrl})`, inline: false }
+      )
+      .setFooter({ text: `Angefordert von ${message.author.tag}` })
+      .setTimestamp();
+
+    const reply = await message.reply({ embeds: [embed] });
+    deleteAfter(reply);
+    deleteAfter(message);
+    return;
+  }
+
+  // ----- !avatar -----
+  if (command === '!avatar') {
+    const target = message.mentions.users.first() || message.author;
+    const avatarUrl = target.displayAvatarURL({ size: 1024, extension: 'png', forceStatic: false });
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🖼️ Avatar von ${target.username}`)
+      .setImage(avatarUrl)
+      .setColor(0x5865F2)
+      .addFields(
+        { name: '👤 User', value: `${target} - \`${target.tag}\``, inline: true },
+        { name: '🆔 ID', value: `\`${target.id}\``, inline: true },
+        { name: '🔗 Link', value: `[Avatar öffnen](${avatarUrl})`, inline: false }
+      )
+      .setFooter({ text: `Angefordert von ${message.author.tag}` })
+      .setTimestamp();
+
+    const reply = await message.reply({ embeds: [embed] });
+    deleteAfter(reply);
+    deleteAfter(message);
+    return;
+  }
+
+  // ----- !history -----
+  if (command === '!history') {
+    const target = message.mentions.users.first() || message.author;
+
+    const loading = await message.reply(`⏳ Suche die letzten 20 Nachrichten von ${target}...`);
+
+    try {
+      let allMessages = [];
+
+      // Alle Text-Channels durchgehen
+      const textChannels = message.guild.channels.cache.filter(c => c.isTextBased() && c.viewable);
+
+      for (const [, ch] of textChannels) {
+        try {
+          const fetched = await ch.messages.fetch({ limit: 100 }).catch(() => null);
+          if (!fetched) continue;
+          const userMsgs = fetched.filter(m => m.author.id === target.id);
+          allMessages.push(...userMsgs.values());
+        } catch {}
+      }
+
+      // Nach Zeit sortieren, neuste zuerst, nur 20 nehmen
+      allMessages.sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+      const last20 = allMessages.slice(0, 20);
+
+      if (last20.length === 0) {
+        return loading.edit(`❌ Ich habe **keine Nachrichten** von ${target} in den letzten 100 Nachrichten pro Channel gefunden.`);
+      }
+
+      const list = last20.map((m, i) => {
+        const time = `<t:${Math.floor(m.createdTimestamp / 1000)}:R>`;
+        const content = m.content ? m.content.slice(0, 80).replace(/\n/g, ' ') : '*Bild / Datei / Embed*';
+        return `**${i + 1}.** ${m.channel} • ${time}\n> ${content}\n> [Zur Nachricht](${m.url})`;
+      }).join('\n\n');
+
+      const embed = new EmbedBuilder()
+        .setTitle(`📜 History von ${target.username}`)
+        .setDescription(list.slice(0, 4000))
+        .setColor(0x00AAFF)
+        .setThumbnail(target.displayAvatarURL())
+        .setFooter({ text: `${last20.length} Nachrichten gefunden | ${target.tag}` })
+        .setTimestamp();
+
+      await loading.edit({ content: '', embeds: [embed] });
+      deleteAfter(message);
+    } catch (e) {
+      console.log('Fehler bei !history:', e);
+      loading.edit('❌ Fehler beim Suchen der History!');
+    }
+    return;
+  }
+});
