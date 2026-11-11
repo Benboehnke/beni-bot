@@ -673,3 +673,137 @@ fetch('https://discord.com/api/v10/users/@me', {
   console.log('HTTPS TEST Status:', r.status);
   console.log('HTTPS TEST Antwort:', (await r.text()).slice(0, 200));
 }).catch(e => console.log('HTTPS TEST FEHLER:', e.message));
+
+// ===== REPORT SYSTEM - EINFACH UNTEN DRAN =====
+let reportChannels = {};
+if (fs.existsSync('./reportchannels.json')) {
+  try { reportChannels = JSON.parse(fs.readFileSync('./reportchannels.json', 'utf8')); } catch (e) { reportChannels = {}; }
+}
+function saveReportChannels() {
+  fs.writeFileSync('./reportchannels.json', JSON.stringify(reportChannels, null, 2));
+}
+
+// Beleidigungen / unangemessenes Verhalten - hier kannst du Wörter hinzufügen
+const REPORT_WORDS = [
+  "hurensohn", "huso", "wichser", "arschloch", "fotze", "bastard",
+  "idiot", "spast", "behindert", "missgeburt", "schlampe", "hure",
+  "fick dich", "fuck you", "halt dein maul", "verpiss dich",
+  "kys", "bitch", "arsch", "dumm"
+];
+
+function findReportWords(text) {
+  if (!text) return [];
+  const lower = text.toLowerCase();
+  return REPORT_WORDS.filter(w => lower.includes(w));
+}
+
+function highlightReportWords(text) {
+  let result = text;
+  for (const w of REPORT_WORDS) {
+    const regex = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    result = result.replace(regex, `**||${w.toUpperCase()}||**`);
+  }
+  return result;
+}
+
+async function sendReportEmbed(guild, reportedUser, reporter, reasonText, channelObj, messageUrl, type) {
+  const ids = reportChannels[guild.id] || [];
+  if (ids.length === 0) return false;
+
+  const found = findReportWords(reasonText);
+  const embed = new EmbedBuilder()
+    .setTitle(type === 'auto' ? '⚠️ BELEIDIGUNG ERKANNT - AUTO REPORT' : '🚨 NEUER REPORT')
+    .setColor(type === 'auto' ? 0xFFAA00 : 0xFF0000)
+    .addFields(
+      { name: '👤 Gemeldeter User', value: `${reportedUser} - \`${reportedUser.tag || reportedUser.id}\``, inline: true },
+      { name: '👮 Gemeldet von', value: reporter ? `${reporter} - \`${reporter.tag}\`` : 'Auto-Mod', inline: true },
+      { name: '📍 Channel', value: `${channelObj}`, inline: true },
+      { name: '💬 Nachricht / Grund', value: highlightReportWords(reasonText).slice(0, 1000), inline: false },
+      { name: '🚫 Markierte Wörter', value: found.length ? found.map(w => `\`${w}\``).join(', ') : 'Kein Wort aus Liste, aber manuell reported', inline: false },
+      { name: '🔗 Link', value: messageUrl ? `[Zur Nachricht springen](${messageUrl})` : 'Kein Link', inline: false }
+    )
+    .setThumbnail(reportedUser.displayAvatarURL ? reportedUser.displayAvatarURL() : null)
+    .setFooter({ text: `User ID: ${reportedUser.id} | Beni Bot Report System` })
+    .setTimestamp();
+
+  for (const cid of ids) {
+    const ch = guild.channels.cache.get(cid);
+    if (!ch) continue;
+    const msg = await ch.send({ embeds: [embed] }).catch(() => null);
+    if (msg) {
+      await msg.react('✅').catch(() => {});
+      await msg.react('❌').catch(() => {});
+      await msg.react('👀').catch(() => {});
+    }
+  }
+  return true;
+}
+
+// ===== REPORT HANDLER - 2. messageCreate, stört deinen alten nicht =====
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  const args = message.content.trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  // ----- !addchannelreport -----
+  if (command === '!addchannelreport') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
+    const channel = message.mentions.channels.first();
+    if (!channel) return fail(message, 'Benutzung: `!addchannelreport #channel`');
+    if (!reportChannels[message.guild.id]) reportChannels[message.guild.id] = [];
+    if (reportChannels[message.guild.id].includes(channel.id)) return fail(message, `${channel} ist schon ein Report-Channel!`);
+    reportChannels[message.guild.id].push(channel.id);
+    saveReportChannels();
+    return success(message, `${channel} wurde als **Report-Channel** hinzugefügt!\nAlle Reports / Beleidigungen landen jetzt da.`);
+  }
+
+  // ----- !removechannelreport -----
+  if (command === '!removechannelreport') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
+    const channel = message.mentions.channels.first();
+    if (!channel) return fail(message, 'Benutzung: `!removechannelreport #channel`');
+    if (!reportChannels[message.guild.id] || !reportChannels[message.guild.id].includes(channel.id)) return fail(message, `${channel} ist kein Report-Channel!`);
+    reportChannels[message.guild.id] = reportChannels[message.guild.id].filter(id => id !== channel.id);
+    saveReportChannels();
+    return success(message, `${channel} wurde als **Report-Channel entfernt**!`);
+  }
+
+  // ----- !reportchannelstatus -----
+  if (command === '!reportchannelstatus') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
+    const ids = reportChannels[message.guild.id] || [];
+    if (ids.length === 0) return fail(message, 'Es ist kein Report-Channel gesetzt!\nSetze einen mit: `!addchannelreport #channel`');
+    const list = ids.map(id => {
+      const ch = message.guild.channels.cache.get(id);
+      return ch ? `${ch} - \`${id}\`` : `Unbekannt - \`${id}\``;
+    }).join('\n');
+    const embed = new EmbedBuilder()
+      .setTitle('📝 • REPORT-CHANNEL STATUS')
+      .setDescription(list)
+      .setColor(0x00AAFF)
+      .setFooter({ text: `Server: ${message.guild.name}` })
+      .setTimestamp();
+    return message.channel.send({ embeds: [embed] });
+  }
+
+  // ----- !report @User Grund -----
+  if (command === '!report') {
+    const target = message.mentions.members.first() || message.mentions.users.first();
+    if (!target) return fail(message, 'Benutzung: `!report @User Grund`\nBeispiel: `!report @Max beleidigt mich`');
+    const reason = args.slice(1).join(' ') || 'Kein Grund angegeben';
+    const sent = await sendReportEmbed(message.guild, target.user || target, message.author, reason, message.channel, message.url, 'manual');
+    if (!sent) return fail(message, 'Es ist kein Report-Channel gesetzt!\nAdmin muss erst `!addchannelreport #channel` machen.');
+    return success(message, `Report gegen ${target} wurde gesendet!`);
+  }
+
+  // ----- AUTO-MOD: Normale Nachricht mit Beleidigung -----
+  if (!command.startsWith('!')) {
+    const found = findReportWords(message.content);
+    if (found.length > 0) {
+      // Nicht doppelt loggen wenn es schon im Report-Channel ist
+      const ids = reportChannels[message.guild.id] || [];
+      if (ids.includes(message.channel.id)) return;
+      await sendReportEmbed(message.guild, message.author, null, message.content, message.channel, message.url, 'auto');
+    }
+  }
+});
