@@ -1305,3 +1305,18 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.reply({ content: `✅ ⚡ <@&${roleId}> bekommt jetzt **${mult}x XP**!`, ephemeral: true });
   }
 });
+
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  if (message.content.trim().toLowerCase() !== '!distanze') return;
+
+  const embed = new EmbedBuilder()
+    .setTitle('!DISTANZ!')
+    .setDescription('Wir distanzieren uns von dieser Aussage und unterstützen sie absolut nicht!')
+    .setColor(0xFF0000)
+    .setFooter({ text: 'Beni Bot' })
+    .setTimestamp();
+
+  return message.channel.send({ embeds: [embed] });
+});
