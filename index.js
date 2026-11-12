@@ -917,3 +917,391 @@ client.on('messageCreate', async (message) => {
     return;
   }
 });
+
+// ============================================================
+// ⭐ BENI BOT - LEVEL SYSTEM v1.0 by Elyias
+// Einfach unten dran machen - Kein anderer Code muss geändert werden!
+// ============================================================
+const fs = require('fs');
+const LEVELS_FILE = './levels.json';
+
+// ---- Daten laden / speichern ----
+let levelData = { users: {}, guilds: {} };
+if (fs.existsSync(LEVELS_FILE)) {
+  try { levelData = JSON.parse(fs.readFileSync(LEVELS_FILE, 'utf8')); } catch {}
+  if (!levelData.users) levelData.users = {};
+  if (!levelData.guilds) levelData.guilds = {};
+}
+function saveLevels() {
+  fs.writeFileSync(LEVELS_FILE, JSON.stringify(levelData, null, 2));
+}
+function getGuildConfig(guildId) {
+  if (!levelData.guilds[guildId]) levelData.guilds[guildId] = { levelRoles: {}, multipliers: {}, announceChannel: null, levelUpMsg: true, voiceXP: true, msgXP: true };
+  return levelData.guilds[guildId];
+}
+function getUserKey(guildId, userId) { return `${guildId}_${userId}`; }
+function getUser(guildId, userId) {
+  const key = getUserKey(guildId, userId);
+  if (!levelData.users[key]) levelData.users[key] = { xp: 0, level: 0, totalMessages: 0, voiceMinutes: 0, voiceXP: 0, msgXP: 0 };
+  return levelData.users[key];
+}
+
+// ---- Level Berechnung ----
+function xpForLevel(level) {
+  return 5 * (level * level) + 50 * level + 100; // Lvl 0->100, Lvl 1->155, Lvl 2->220, Lvl 5->475...
+}
+function makeBar(current, needed) {
+  const total = 12;
+  const filled = Math.min(total, Math.floor((current / needed) * total));
+  const empty = total - filled;
+  return '▓'.repeat(filled) + '░'.repeat(empty);
+}
+function getMultiplier(member, cfg) {
+  let mult = 1;
+  if (!member) return mult;
+  for (const [roleId, m] of Object.entries(cfg.multipliers)) {
+    if (member.roles.cache.has(roleId)) mult = Math.max(mult, parseFloat(m));
+  }
+  return mult;
+}
+
+// ---- XP geben + Level Up Check ----
+async function addXP(messageOrMember, guild, member, baseXP, source) {
+  const cfg = getGuildConfig(guild.id);
+  const user = getUser(guild.id, member.id);
+  const mult = getMultiplier(member, cfg);
+  const finalXP = Math.floor(baseXP * mult);
+  user.xp += finalXP;
+  if (source === 'voice') { user.voiceXP += finalXP; }
+  else { user.msgXP += finalXP; }
+
+  let leveledUp = false;
+  while (user.xp >= xpForLevel(user.level)) {
+    user.xp -= xpForLevel(user.level);
+    user.level++;
+    leveledUp = true;
+  }
+  saveLevels();
+
+  if (leveledUp) {
+    // Level Role geben
+    const roleId = cfg.levelRoles[String(user.level)];
+    if (roleId) {
+      const role = guild.roles.cache.get(roleId);
+      if (role && member.manageable) {
+        await member.roles.add(role).catch(()=>{});
+      }
+    }
+    // Announcement
+    if (cfg.levelUpMsg) {
+      const embed = new EmbedBuilder()
+        .setTitle('🎉 LEVEL UP!')
+        .setDescription(`**${member.user}** ist jetzt **Level ${user.level}**!`)
+        .addFields(
+          { name: '🆙 Neues Level', value: `Level ${user.level}`, inline: true },
+          { name: '⚡ XP', value: `${finalXP} XP bekommen (${source === 'voice' ? '🎙️ Voice' : '💬 Chat'})`, inline: true },
+          { name: '📊 Nächstes Level', value: `${user.xp} / ${xpForLevel(user.level)} XP`, inline: false },
+        )
+        .setColor(0x00FF88)
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+        .setFooter({ text: 'Beni Bot • Level System • Made by Elyias' })
+        .setTimestamp();
+      if (cfg.announceChannel) {
+        const ch = guild.channels.cache.get(cfg.announceChannel);
+        if (ch) ch.send({ embeds: [embed] }).catch(()=>{});
+      } else if (messageOrMember && messageOrMember.channel) {
+        messageOrMember.channel.send({ embeds: [embed] }).catch(()=>{});
+      }
+    }
+  }
+  return { user, finalXP, mult, leveledUp };
+}
+
+// ============================================================
+// 💬 XP FÜR NACHRICHTEN - 2 bis 10 XP je nach Länge
+// ============================================================
+const msgCooldown = new Map();
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  // Cooldown 5 Sek gegen Spam
+  const coolKey = `${message.guild.id}_${message.author.id}`;
+  if (msgCooldown.has(coolKey)) return;
+  msgCooldown.set(coolKey, true);
+  setTimeout(() => msgCooldown.delete(coolKey), 5000);
+
+  const cfg = getGuildConfig(message.guild.id);
+  if (cfg.msgXP === false) return;
+
+  const member = message.member;
+  const len = message.content.length;
+  // 2 XP bei kurzem Text, bis 10 XP bei langem Text
+  let xp = 2 + Math.floor(Math.min(len, 80) / 10); // 0-8 extra
+  if (xp > 10) xp = 10;
+  if (xp < 2) xp = 2;
+
+  const user = getUser(message.guild.id, message.author.id);
+  user.totalMessages++;
+  await addXP(message, message.guild, member, xp, 'chat');
+});
+
+// ============================================================
+// 🎙️ XP FÜR VOICE - Pro Minute 10x 2 XP = 20 XP
+// ============================================================
+setInterval(async () => {
+  for (const [guildId, guild] of client.guilds.cache) {
+    const cfg = getGuildConfig(guildId);
+    if (cfg.voiceXP === false) continue;
+    for (const [memberId, member] of guild.members.cache) {
+      if (member.user.bot) continue;
+      if (!member.voice.channel) continue;
+      if (member.voice.selfMute && member.voice.selfDeaf) continue; // AFK / gemutet zählt nicht
+      if (member.voice.channel.id === guild.afkChannelId) continue;
+
+      const user = getUser(guildId, memberId);
+      user.voiceMinutes += 1;
+      // 10x 2 XP pro Minute
+      await addXP(null, guild, member, 20, 'voice');
+    }
+  }
+}, 60 * 1000);
+
+// ============================================================
+// 📜 COMMANDS
+// ============================================================
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  const args = message.content.trim().split(/ +/);
+  const cmd = args.shift().toLowerCase();
+  const guild = message.guild;
+  const cfg = getGuildConfig(guild.id);
+
+  // ---------- !rank ----------
+  if (cmd === '!rank') {
+    const target = message.mentions.members.first() || message.member;
+    const user = getUser(guild.id, target.id);
+    const needed = xpForLevel(user.level);
+    const bar = makeBar(user.xp, needed);
+    const percent = Math.floor((user.xp / needed) * 100);
+    // Rang berechnen
+    const all = Object.entries(levelData.users).filter(([k]) => k.startsWith(guild.id + '_')).sort((a,b) => (b[1].level*100000 + b[1].xp) - (a[1].level*100000 + a[1].xp));
+    const rankPos = all.findIndex(([k]) => k === getUserKey(guild.id, target.id)) + 1;
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🏆 RANK VON ${target.user.username}`)
+      .setDescription(`**${target}** ist auf Platz **#${rankPos || '?' }** auf diesem Server!`)
+      .addFields(
+        { name: '⭐ Level', value: `**Level ${user.level}**`, inline: true },
+        { name: '⚡ XP', value: `${user.xp} / ${needed} XP`, inline: true },
+        { name: '🏅 Rang', value: `#${rankPos}`, inline: true },
+        { name: `📊 Fortschritt bis Level ${user.level + 1} - ${percent}%`, value: `${bar}\n\`${user.xp} / ${needed} XP\` • Noch **${needed - user.xp} XP** bis Level ${user.level + 1}!`, inline: false },
+        { name: '💬 Nachrichten', value: `${user.totalMessages} Nachrichten`, inline: true },
+        { name: '🎙️ Voice Time', value: `${user.voiceMinutes} Minuten • ${user.voiceXP} XP`, inline: true },
+        { name: '✍️ Chat XP', value: `${user.msgXP} XP`, inline: true },
+      )
+      .setColor(0x5865F2)
+      .setThumbnail(target.user.displayAvatarURL({ dynamic: true }))
+      .setFooter({ text: 'Beni Bot • Level System • Tippe !leaderboard für Top 10' })
+      .setTimestamp();
+    return message.reply({ embeds: [embed] });
+  }
+
+  // ---------- !leaderboard / !lb ----------
+  if (cmd === '!leaderboard' || cmd === '!lb' || cmd === '!top') {
+    const all = Object.entries(levelData.users)
+      .filter(([k]) => k.startsWith(guild.id + '_'))
+      .sort((a,b) => (b[1].level*100000 + b[1].xp) - (a[1].level*100000 + a[1].xp))
+      .slice(0, 10);
+    if (all.length === 0) return message.reply('🏆 Noch hat keiner XP! Schreib mal was in den Chat! 💬');
+
+    let desc = '';
+    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
+    for (let i = 0; i < all.length; i++) {
+      const [key, u] = all[i];
+      const userId = key.split('_')[1];
+      const member = guild.members.cache.get(userId);
+      const name = member ? member.user.username : `User ${userId}`;
+      const bar = makeBar(u.xp, xpForLevel(u.level));
+      desc += `${medals[i]} **${name}** — Level **${u.level}** • ${u.xp} XP\n${bar}\n🎙️ ${u.voiceMinutes} Min Voice • 💬 ${u.totalMessages} Nachrichten\n\n`;
+    }
+    const embed = new EmbedBuilder()
+      .setTitle('🏆 LEADERBOARD - TOP 10')
+      .setDescription(desc)
+      .setColor(0xFFD700)
+      .setThumbnail(guild.iconURL({ dynamic: true }))
+      .setFooter({ text: 'Beni Bot • Level System • !rank für dein Rank' })
+      .setTimestamp();
+    return message.reply({ embeds: [embed] });
+  }
+
+  // ---------- !addlevelannouncementchannel ----------
+  if (cmd === '!addlevelannouncementchannel' || cmd === '!addlevelchannel' || cmd === '!setlevelchannel') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Nur **Administratoren** dürfen das! 👑');
+    const ch = message.mentions.channels.first();
+    if (!ch) return message.reply('❌ Mach so: `!addlevelannouncementchannel #level-ups` 📢');
+    cfg.announceChannel = ch.id;
+    saveLevels();
+    const embed = new EmbedBuilder()
+      .setTitle('✅ LEVEL CHANNEL GESETZT!')
+      .setDescription(`Level-Ups werden jetzt in ${ch} angekündigt! 🎉`)
+      .addFields(
+        { name: '📢 Channel', value: `${ch}`, inline: true },
+        { name: '👤 Gesetzt von', value: `${message.author}`, inline: true },
+      )
+      .setColor(0x00FF88)
+      .setFooter({ text: 'Beni Bot • Level System' });
+    return message.reply({ embeds: [embed] });
+  }
+
+  // ---------- !removelevelchannel ----------
+  if (cmd === '!removelevelchannel' || cmd === '!removelevelannouncementchannel') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Nur **Administratoren** dürfen das! 👑');
+    const ch = message.mentions.channels.first();
+    if (cfg.announceChannel && ch && cfg.announceChannel !== ch.id) {
+      return message.reply(`❌ Der Level Channel ist ${guild.channels.cache.get(cfg.announceChannel)} - nicht ${ch}`);
+    }
+    cfg.announceChannel = null;
+    saveLevels();
+    return message.reply('🗑️ ✅ **Level Announcement Channel wurde entfernt!** Level-Ups kommen jetzt wieder in den Chat wo man schreibt.');
+  }
+
+  // ---------- !Leveldashboard ----------
+  if (cmd === '!leveldashboard' || cmd === '!levelconfig' || cmd === '!lvlsetup') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Nur **Administratoren** dürfen das Dashboard öffnen! 👑');
+
+    const rolesText = Object.entries(cfg.levelRoles).length === 0 ? '*Noch keine Level Roles gesetzt*' : Object.entries(cfg.levelRoles).map(([lvl, roleId]) => `Level **${lvl}** → <@&${roleId}>`).join('\n');
+    const multText = Object.entries(cfg.multipliers).length === 0 ? '*Noch keine Multiplier*' : Object.entries(cfg.multipliers).map(([roleId, m]) => `<@&${roleId}> → **${m}x XP**`).join('\n');
+    const announceText = cfg.announceChannel ? `<#${cfg.announceChannel}>` : '*Kein Channel - Level-Ups im Chat*';
+
+    const embed = new EmbedBuilder()
+      .setTitle('⚙️ BENI BOT - LEVEL DASHBOARD')
+      .setDescription('Hier kannst du **alles** für das Level System einstellen! Klick auf die Knöpfe unten. 👇')
+      .addFields(
+        { name: '🎭 Level Roles', value: rolesText, inline: false },
+        { name: '⚡ XP Multiplier', value: multText, inline: false },
+        { name: '📢 Announcement Channel', value: announceText, inline: true },
+        { name: '💬 Nachrichten XP', value: cfg.msgXP ? '✅ AN (2-10 XP)' : '❌ AUS', inline: true },
+        { name: '🎙️ Voice XP', value: cfg.voiceXP ? '✅ AN (20 XP / Min)' : '❌ AUS', inline: true },
+        { name: '🎉 Level-Up Nachricht', value: cfg.levelUpMsg ? '✅ AN' : '❌ AUS', inline: true },
+        { name: '📖 So gehts', value: '• **Level Role:** `!setlevelrole 5 @Rolle`\n• **Multiplier:** `!setmultiplier @Rolle 2`\n• **Channel:** `!addlevelannouncementchannel #channel`\n• **Channel löschen:** `!removelevelchannel #channel`', inline: false },
+      )
+      .setColor(0x5865F2)
+      .setThumbnail(guild.iconURL({ dynamic: true }))
+      .setFooter({ text: 'Beni Bot • Level Dashboard • Nur für Admins' })
+      .setTimestamp();
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('lvl_add_role').setLabel('🎭 Level Role setzen').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('lvl_add_mult').setLabel('⚡ Multiplier setzen').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('lvl_toggle_msg').setLabel(cfg.msgXP ? '💬 Chat XP AUS' : '💬 Chat XP AN').setStyle(ButtonStyle.Secondary),
+    );
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(cfg.voiceXP ? '🎙️ Voice XP AUS' : '🎙️ Voice XP AN').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('lvl_toggle_announce').setLabel(cfg.levelUpMsg ? '🎉 Level-Up AUS' : '🎉 Level-Up AN').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('lvl_reset').setLabel('🗑️ Alles zurücksetzen').setStyle(ButtonStyle.Danger),
+    );
+    return message.reply({ embeds: [embed], components: [row1, row2] });
+  }
+
+  // ---------- !setlevelrole 5 @Rolle ----------
+  if (cmd === '!setlevelrole') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Nur **Administratoren**! 👑');
+    const level = parseInt(args[0]);
+    const role = message.mentions.roles.first();
+    if (!level || !role) return message.reply('❌ Mach so: `!setlevelrole 5 @Profi` — Ab Level 5 bekommt man dann die Rolle! 🎭');
+    cfg.levelRoles[String(level)] = role.id;
+    saveLevels();
+    return message.reply(`✅ 🎭 **Level Role gesetzt!** Ab **Level ${level}** bekommt man jetzt ${role}!`);
+  }
+
+  // ---------- !setmultiplier @Rolle 2 ----------
+  if (cmd === '!setmultiplier' || cmd === '!setxpboost') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Nur **Administratoren**! 👑');
+    const role = message.mentions.roles.first();
+    const mult = parseFloat(args[1] || args[0]);
+    if (!role || !mult || mult < 1 || mult > 5) return message.reply('❌ Mach so: `!setmultiplier @VIP 2` — Die Rolle bekommt dann 2x XP! ⚡ (1x bis 5x möglich)');
+    cfg.multipliers[role.id] = mult;
+    saveLevels();
+    return message.reply(`✅ ⚡ **Multiplier gesetzt!** ${role} bekommt jetzt **${mult}x XP** bei jeder Nachricht & Voice Minute!`);
+  }
+
+  // ---------- !removemultiplier @Rolle ----------
+  if (cmd === '!removemultiplier') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Nur **Administratoren**! 👑');
+    const role = message.mentions.roles.first();
+    if (!role) return message.reply('❌ Mach so: `!removemultiplier @VIP`');
+    delete cfg.multipliers[role.id];
+    saveLevels();
+    return message.reply(`✅ Multiplier für ${role} wurde entfernt!`);
+  }
+
+  // ---------- !removelevelrole 5 ----------
+  if (cmd === '!removelevelrole') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Nur **Administratoren**! 👑');
+    const level = args[0];
+    if (!level) return message.reply('❌ Mach so: `!removelevelrole 5`');
+    delete cfg.levelRoles[String(level)];
+    saveLevels();
+    return message.reply(`✅ Level Role für Level ${level} wurde entfernt!`);
+  }
+
+  // ---------- !givexp @User 100 ----------
+  if (cmd === '!givexp' || cmd === '!addxp') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Nur **Administratoren**! 👑');
+    const target = message.mentions.members.first();
+    const amount = parseInt(args[1]);
+    if (!target || !amount) return message.reply('❌ Mach so: `!givexp @User 100`');
+    await addXP(message, guild, target, amount, 'chat');
+    return message.reply(`✅ ${target} hat **${amount} XP** bekommen! 🎁`);
+  }
+});
+
+// ============================================================
+// 🖱️ BUTTONS VOM DASHBOARD
+// ============================================================
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton() && !interaction.isModalSubmit()) return;
+  if (!interaction.guild) return;
+  const cfg = getGuildConfig(interaction.guild.id);
+  if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    return interaction.reply({ content: '❌ Nur **Administratoren** dürfen das! 👑', ephemeral: true });
+  }
+
+  // Modal öffnen: Level Role
+  if (interaction.isButton() && interaction.customId === 'lvl_add_role') {
+    const modal = new ModalBuilder().setCustomId('modal_levelrole').setTitle('🎭 Level Role setzen');
+    const lvlInput = new TextInputBuilder().setCustomId('level').setLabel('Ab welchem Level? (z.B. 5)').setStyle(TextInputStyle.Short).setPlaceholder('5').setRequired(true);
+    const roleInput = new TextInputBuilder().setCustomId('roleid').setLabel('Rollen ID (Rechtsklick auf Rolle -> ID kopieren)').setStyle(TextInputStyle.Short).setPlaceholder('123456789012345678').setRequired(true);
+    modal.addComponents(new ActionRowBuilder().addComponents(lvlInput), new ActionRowBuilder().addComponents(roleInput));
+    return interaction.showModal(modal);
+  }
+  // Modal öffnen: Multiplier
+  if (interaction.isButton() && interaction.customId === 'lvl_add_mult') {
+    const modal = new ModalBuilder().setCustomId('modal_mult').setTitle('⚡ XP Multiplier setzen');
+    const roleInput = new TextInputBuilder().setCustomId('roleid').setLabel('Rollen ID').setStyle(TextInputStyle.Short).setPlaceholder('123456789012345678').setRequired(true);
+    const multInput = new TextInputBuilder().setCustomId('mult').setLabel('Multiplier? (1 bis 5, z.B. 2)').setStyle(TextInputStyle.Short).setPlaceholder('2').setRequired(true);
+    modal.addComponents(new ActionRowBuilder().addComponents(roleInput), new ActionRowBuilder().addComponents(multInput));
+    return interaction.showModal(modal);
+  }
+  // Toggles
+  if (interaction.isButton() && interaction.customId === 'lvl_toggle_msg') { cfg.msgXP = !cfg.msgXP; saveLevels(); return interaction.reply({ content: `💬 Chat XP ist jetzt **${cfg.msgXP ? 'AN ✅' : 'AUS ❌'}**`, ephemeral: true }); }
+  if (interaction.isButton() && interaction.customId === 'lvl_toggle_voice') { cfg.voiceXP = !cfg.voiceXP; saveLevels(); return interaction.reply({ content: `🎙️ Voice XP ist jetzt **${cfg.voiceXP ? 'AN ✅' : 'AUS ❌'}**`, ephemeral: true }); }
+  if (interaction.isButton() && interaction.customId === 'lvl_toggle_announce') { cfg.levelUpMsg = !cfg.levelUpMsg; saveLevels(); return interaction.reply({ content: `🎉 Level-Up Nachricht ist jetzt **${cfg.levelUpMsg ? 'AN ✅' : 'AUS ❌'}**`, ephemeral: true }); }
+  if (interaction.isButton() && interaction.customId === 'lvl_reset') {
+    levelData.guilds[interaction.guild.id] = { levelRoles: {}, multipliers: {}, announceChannel: null, levelUpMsg: true, voiceXP: true, msgXP: true };
+    saveLevels(); return interaction.reply({ content: '🗑️ **Alles zurückgesetzt!** Level System ist wieder auf Standard.', ephemeral: true });
+  }
+
+  // Modal Antworten speichern
+  if (interaction.isModalSubmit() && interaction.customId === 'modal_levelrole') {
+    const lvl = interaction.fields.getTextInputValue('level');
+    const roleId = interaction.fields.getTextInputValue('roleid').trim();
+    cfg.levelRoles[lvl] = roleId; saveLevels();
+    return interaction.reply({ content: `✅ 🎭 Ab **Level ${lvl}** bekommt man jetzt <@&${roleId}>!`, ephemeral: true });
+  }
+  if (interaction.isModalSubmit() && interaction.customId === 'modal_mult') {
+    const roleId = interaction.fields.getTextInputValue('roleid').trim();
+    const mult = parseFloat(interaction.fields.getTextInputValue('mult'));
+    cfg.multipliers[roleId] = mult; saveLevels();
+    return interaction.reply({ content: `✅ ⚡ <@&${roleId}> bekommt jetzt **${mult}x XP**!`, ephemeral: true });
+  }
+});
