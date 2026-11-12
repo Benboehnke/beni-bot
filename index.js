@@ -1,3 +1,27 @@
+const { EmbedBuilder } = require('discord.js');
+const mongoose = require('mongoose');
+
+mongoose.connect(process.env.MONGO_URL)
+  .then(() => console.log('Mongo verbunden! ✅'))
+  .catch(err => console.log('Mongo Fehler:', err));
+
+const levelSchema = new mongoose.Schema({
+  userId: String,
+  guildId: String,
+  xp: { type: Number, default: 0 },
+  level: { type: Number, default: 1 }
+});
+const Level = mongoose.model('Level', levelSchema);
+
+const configSchema = new mongoose.Schema({
+  guildId: String,
+  levelupChannelId: { type: String, default: null }
+});
+const GuildConfig = mongoose.model('GuildConfig', configSchema);
+
+function getNeededXp(level) {
+  return 5 * (level ** 2) + 50 * level + 100;
+}
 
 const { Client, GatewayIntentBits, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const http = require('http');
