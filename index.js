@@ -922,7 +922,7 @@ client.on('messageCreate', async (message) => {
 // ⭐ BENI BOT - LEVEL SYSTEM v1.0 by Elyias
 // Einfach unten dran machen - Kein anderer Code muss geändert werden!
 // ============================================================
-const fs = require('fs');
+
 const LEVELS_FILE = './levels.json';
 
 // ---- Daten laden / speichern ----
