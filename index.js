@@ -943,136 +943,155 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-// ============================================================
-// ⭐ BENI BOT - LEVEL SYSTEM v2.0 by Elyias - MIT MONGO
-// Gleiche Funktionen, nur Speicherung in Mongo statt levels.json
-// ============================================================
+// --- XP SYSTEM ---
+if (!message.author.bot && message.guild) {
+  try {
+    let user = await Level.findOne({ userId: message.author.id, guildId: message.guild.id });
+    if (!user) user = new Level({ userId: message.author.id, guildId: message.guild.id });
 
-const mongoose = require('mongoose');
+    user.xp += Math.floor(Math.random() * 11) + 5;
+    const needed = getNeededXp(user.level);
 
-mongoose.connect(process.env.MONGO_URL)
-  .then(() => console.log('Mongo verbunden! ✅'))
-  .catch(err => console.log('Mongo Fehler:', err));
+    if (user.xp >= needed) {
+      user.level += 1;
+      user.xp = 0;
+      await user.save();
 
-// ---- Mongo Modelle - statt levels.json ----
-const UserLevel = mongoose.model('UserLevel', new mongoose.Schema({
-  key: String,
-  guildId: String,
-  userId: String,
-  xp: { type: Number, default: 0 },
-  level: { type: Number, default: 0 },
-  totalMessages: { type: Number, default: 0 },
-  voiceMinutes: { type: Number, default: 0 },
-  voiceXP: { type: Number, default: 0 },
-  msgXP: { type: Number, default: 0 }
-}));
+      const config = await GuildConfig.findOne({ guildId: message.guild.id });
+      const targetChannel = config?.levelupChannelId 
+        ? await message.guild.channels.fetch(config.levelupChannelId).catch(() => null)
+        : message.channel;
 
-const GuildConfig = mongoose.model('GuildConfig', new mongoose.Schema({
-  guildId: String,
-  levelRoles: { type: Object, default: {} },
-  multipliers: { type: Object, default: {} },
-  announceChannel: { type: String, default: null },
-  levelUpMsg: { type: Boolean, default: true },
-  voiceXP: { type: Boolean, default: true },
-  msgXP: { type: Boolean, default: true }
-}));
-
-// ---- Daten laden / speichern - GLEICHE NAMEN WIE VORHER ----
-async function getGuildConfig(guildId) {
-  let cfg = await GuildConfig.findOne({ guildId });
-  if (!cfg) cfg = await GuildConfig.create({ guildId });
-  return cfg;
-}
-function getUserKey(guildId, userId) { return `${guildId}_${userId}`; }
-async function getUser(guildId, userId) {
-  const key = getUserKey(guildId, userId);
-  let user = await UserLevel.findOne({ key });
-  if (!user) user = await UserLevel.create({ key, guildId, userId });
-  return user;
-}
-async function saveLevels() {
-  // Nix mehr nötig, Mongo speichert automatisch
-}
-
-// ---- Level Berechnung - UNVERÄNDERT ----
-function xpForLevel(level) {
-  return 5 * (level * level) + 50 * level + 100;
-}
-function makeBar(current, needed) {
-  const total = 12;
-  const filled = Math.min(total, Math.floor((current / needed) * total));
-  const empty = total - filled;
-  return '▓'.repeat(filled) + '░'.repeat(empty);
-}
-function getMultiplier(member, cfg) {
-  let mult = 1;
-  if (!member) return mult;
-  for (const [roleId, m] of Object.entries(cfg.multipliers)) {
-    if (member.roles.cache.has(roleId)) mult = Math.max(mult, parseFloat(m));
-  }
-  return mult;
-}
-
-// ---- XP geben + Level Up Check - GLEICH WIE VORHER, NUR MIT await ----
-async function addXP(messageOrMember, guild, member, baseXP, source) {
-  const cfg = await getGuildConfig(guild.id);
-  const user = await getUser(guild.id, member.id);
-  const mult = getMultiplier(member, cfg);
-  const finalXP = Math.floor(baseXP * mult);
-  user.xp += finalXP;
-  if (source === 'voice') { user.voiceXP += finalXP; }
-  else { user.msgXP += finalXP; }
-
-  let leveledUp = false;
-  while (user.xp >= xpForLevel(user.level)) {
-    user.xp -= xpForLevel(user.level);
-    user.level++;
-    leveledUp = true;
-  }
-  await user.save();
-
-  if (leveledUp) {
-    const roleId = cfg.levelRoles[String(user.level)];
-    if (roleId) {
-      const role = guild.roles.cache.get(roleId);
-      if (role && member.manageable) {
-        await member.roles.add(role).catch(()=>{});
-      }
-    }
-    if (cfg.levelUpMsg) {
       const embed = new EmbedBuilder()
+        .setColor('#00FF88')
         .setTitle('🎉 LEVEL UP!')
-        .setDescription(`**${member.user}** ist jetzt **Level ${user.level}**!`)
-        .addFields(
-          { name: '🆙 Neues Level', value: `Level ${user.level}`, inline: true },
-          { name: '⚡ XP', value: `${finalXP} XP bekommen (${source === 'voice' ? '🎙️ Voice' : '💬 Chat'})`, inline: true },
-          { name: '📊 Nächstes Level', value: `${user.xp} / ${xpForLevel(user.level)} XP`, inline: false },
-        )
-        .setColor(0x00FF88)
-        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-        .setFooter({ text: 'Beni Bot • Level System • Made by Elyias' })
+        .setDescription(`GG ${message.author}! Du bist jetzt **Level ${user.level}**!`)
+        .setThumbnail(message.author.displayAvatarURL())
         .setTimestamp();
-      if (cfg.announceChannel) {
-        const ch = guild.channels.cache.get(cfg.announceChannel);
-        if (ch) ch.send({ embeds: [embed] }).catch(()=>{});
-      } else if (messageOrMember && messageOrMember.channel) {
-        messageOrMember.channel.send({ embeds: [embed] }).catch(()=>{});
-      }
+
+      if (targetChannel) targetChannel.send({ embeds: [embed] });
+    } else {
+      await user.save();
     }
-  }
-  return { user, cfg, finalXP, leveledUp };
+  } catch(e) { console.log('Level Fehler:', e); }
 }
 
-client.on('messageCreate', async (message) => {
-  if (message.author.bot || !message.guild) return;
-  if (message.content.trim().toLowerCase() !== '!distanze') return;
+// --- !levelupchannel #channel ---
+if (command === 'levelupchannel') {
+  if (!message.member.permissions.has('Administrator')) return message.reply('Nur Admins!');
+  const channel = message.mentions.channels.first();
+  if (!channel) return message.reply('Bitte gib einen Channel an: `!levelupchannel #channel`');
+
+  await GuildConfig.findOneAndUpdate(
+    { guildId: message.guild.id },
+    { levelupChannelId: channel.id },
+    { upsert: true, new: true }
+  );
 
   const embed = new EmbedBuilder()
-    .setTitle('!DISTANZ!')
-    .setDescription('Wir distanzieren uns von dieser Aussage und unterstützen sie absolut nicht!')
-    .setColor(0xFF0000)
-    .setFooter({ text: 'Beni Bot' })
+    .setColor('#00FF88')
+    .setTitle('✅ Level-Up Channel gesetzt')
+    .setDescription(`Level-Ups werden jetzt in ${channel} gesendet.`)
     .setTimestamp();
-
   return message.channel.send({ embeds: [embed] });
-});
+}
+
+// --- !removelevelup #channel ---
+if (command === 'removelevelup') {
+  if (!message.member.permissions.has('Administrator')) return message.reply('Nur Admins!');
+  await GuildConfig.findOneAndUpdate(
+    { guildId: message.guild.id },
+    { levelupChannelId: null }
+  );
+  const embed = new EmbedBuilder()
+    .setColor('#FF5555')
+    .setTitle('❌ Level-Up Channel entfernt')
+    .setDescription('Level-Ups werden jetzt wieder im aktuellen Channel gesendet.')
+    .setTimestamp();
+  return message.channel.send({ embeds: [embed] });
+}
+
+// --- !rank [@user] ---
+if (command === 'rank') {
+  const target = message.mentions.users.first() || message.author;
+  let user = await Level.findOne({ userId: target.id, guildId: message.guild.id });
+  if (!user) return message.reply('Der User hat noch keine XP!');
+
+  const needed = getNeededXp(user.level);
+  const progress = Math.floor((user.xp / needed) * 20);
+  const bar = '🟩'.repeat(progress) + '⬛'.repeat(20 - progress);
+
+  // Rang berechnen
+  const all = await Level.find({ guildId: message.guild.id }).sort({ level: -1, xp: -1 });
+  const rankPos = all.findIndex(u => u.userId === target.id) + 1;
+
+  const embed = new EmbedBuilder()
+    .setColor('#5865F2')
+    .setAuthor({ name: `${target.username} - Rank Card`, iconURL: target.displayAvatarURL() })
+    .setThumbnail(target.displayAvatarURL())
+    .addFields(
+      { name: '🏆 Rang', value: `#${rankPos}`, inline: true },
+      { name: '📈 Level', value: `${user.level}`, inline: true },
+      { name: '✨ XP', value: `${user.xp} / ${needed}`, inline: true },
+      { name: '📊 Fortschritt', value: `${bar}\n${Math.floor((user.xp/needed)*100)}%` }
+    )
+    .setTimestamp();
+  return message.channel.send({ embeds: [embed] });
+}
+
+// --- !leaderboard ---
+if (command === 'leaderboard' || command === 'lb') {
+  const top = await Level.find({ guildId: message.guild.id }).sort({ level: -1, xp: -1 }).limit(10);
+  if (top.length === 0) return message.reply('Noch keiner auf dem Leaderboard!');
+
+  let desc = '';
+  const medals = ['🥇','🥈','🥉'];
+  for (let i = 0; i < top.length; i++) {
+    const u = top[i];
+    const member = await message.guild.members.fetch(u.userId).catch(() => null);
+    const name = member ? member.user.username : 'Unbekannt';
+    const medal = medals[i] || `**${i+1}.**`;
+    desc += `${medal} **${name}** - Level ${u.level} | ${u.xp} XP\n`;
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor('#FFD700')
+    .setTitle(`🏆 Leaderboard - ${message.guild.name}`)
+    .setDescription(desc)
+    .setThumbnail(message.guild.iconURL())
+    .setTimestamp();
+  return message.channel.send({ embeds: [embed] });
+}
+
+// --- !leveldashboard ---
+if (command === 'leveldashboard') {
+  const config = await GuildConfig.findOne({ guildId: message.guild.id });
+  const totalUsers = await Level.countDocuments({ guildId: message.guild.id });
+  const topUser = await Level.findOne({ guildId: message.guild.id }).sort({ level: -1, xp: -1 });
+  const totalXp = await Level.aggregate([
+    { $match: { guildId: message.guild.id } },
+    { $group: { _id: null, total: { $sum: '$xp' } } }
+  ]);
+
+  let topName = 'Niemand';
+  if (topUser) {
+    const m = await message.guild.members.fetch(topUser.userId).catch(() => null);
+    topName = m ? `${m.user.username} (Level ${topUser.level})` : `Level ${topUser.level}`;
+  }
+
+  const channelText = config?.levelupChannelId ? `<#${config.levelupChannelId}>` : 'Nicht gesetzt (nutzt aktuellen Channel)';
+
+  const embed = new EmbedBuilder()
+    .setColor('#00AAFF')
+    .setTitle(`📊 Level Dashboard - ${message.guild.name}`)
+    .setThumbnail(message.guild.iconURL())
+    .addFields(
+      { name: '👥 User mit XP', value: `${totalUsers}`, inline: true },
+      { name: '✨ Gesamt XP', value: `${totalXp[0]?.total || 0}`, inline: true },
+      { name: '🏆 Top User', value: topName, inline: true },
+      { name: '📢 Level-Up Channel', value: channelText, inline: false },
+      { name: '⚙️ Commands', value: '`!rank` `!rank @user` `!leaderboard` `!levelupchannel #channel` `!removelevelup`', inline: false }
+    )
+    .setTimestamp();
+  return message.channel.send({ embeds: [embed] });
+}
