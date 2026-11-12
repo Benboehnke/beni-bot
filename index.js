@@ -1,15 +1,3 @@
-const mongoose = require('mongoose');
-
-mongoose.connect(process.env.MONGO_URL)
-  .then(() => console.log('Mongo verbunden! ✅'))
-  .catch(err => console.log('Mongo Fehler:', err));
-
-const Level = mongoose.model('Level', new mongoose.Schema({
-  userId: String,
-  guildId: String,
-  xp: { type: Number, default: 0 },
-  level: { type: Number, default: 0 }
-}));
 
 const { Client, GatewayIntentBits, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const http = require('http');
