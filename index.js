@@ -1177,6 +1177,25 @@ client.on('messageCreate', async (message) => {
       if (targetChannel) targetChannel.send({ embeds: [levelEmbed] }).catch(() => {});
     }
 
+    // ===== !DISTANZE COMMAND =====
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  const command = message.content.trim().toLowerCase().split(/ +/)[0];
+
+  if (command === '!distanze' || command === '!distanz') {
+    // ✅ Haken auf deine Message
+    await message.react('✅').catch(() => {});
+
+    const embed = new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('DISTANZE!')
+      .setDescription(`Wir **${message.guild.name}** distanzieren uns von der gesagten Aussage und unterstützen sie nicht!`)
+      .setThumbnail(message.guild.iconURL())
+      .setTimestamp();
+
+    return message.channel.send({ embeds: [embed] });
+  }
+});
     const embed = new EmbedBuilder().setColor('#00FF88').setTitle('✨ XP gegeben').setDescription(`${target} hat **${amount} XP** erhalten.\nJetzt: **Level ${user.level} | ${user.xp} / ${getNeededXp(user.level)} XP**${user.level > oldLevel ? `\n🎉 Level-Up von ${oldLevel} → ${user.level}!` : ''}`).setThumbnail(target.displayAvatarURL()).setTimestamp();
     return message.channel.send({ embeds: [embed] });
   }
