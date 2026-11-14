@@ -1215,3 +1215,82 @@ fetch('https://discord.com/api/v10/users/@me', {
   console.log('HTTPS TEST Status:', r.status);
   console.log('HTTPS TEST Antwort:', (await r.text()).slice(0, 200));
 }).catch(e => console.log('HTTPS TEST FEHLER:', e.message))
+
+
+// ===== JOINROLE - EINFACH UNTEN DRAN =====
+const joinRoleSchema2 = new mongoose.Schema({
+  guildId: { type: String, required: true, unique: true },
+  roleId: { type: String, required: true }
+});
+const JoinRole2 = mongoose.models.JoinRole || mongoose.model('JoinRole', joinRoleSchema2);
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  if (!message.content.startsWith('!')) return;
+
+  const args = message.content.slice(1).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  // !joinrole @role / !joinrole status
+  if (command === 'joinrole') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply('❌ Du brauchst Admin-Rechte.');
+    }
+
+    if (args[0] === 'status') {
+      const data = await JoinRole2.findOne({ guildId: message.guild.id });
+      await message.react('✅').catch(() => {});
+      if (!data) return message.reply('❌ Es ist keine Join-Role gesetzt.');
+      const role = message.guild.roles.cache.get(data.roleId);
+      return message.reply(`✅ Join-Role ist: ${role ? `<@&${role.id}>` : data.roleId}`);
+    }
+
+    const role = message.mentions.roles.first();
+    if (!role) {
+      await message.react('✅').catch(() => {});
+      return message.reply('❌ Bitte gib eine Rolle an: `!joinrole @Role`');
+    }
+
+    await JoinRole2.findOneAndUpdate(
+      { guildId: message.guild.id },
+      { guildId: message.guild.id, roleId: role.id },
+      { upsert: true, new: true }
+    );
+
+    await message.react('✅').catch(() => {});
+    return message.reply(`✅ Join-Role gesetzt auf: <@&${role.id}>`);
+  }
+
+  // !removejoinrole @role
+  if (command === 'removejoinrole') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply('❌ Du brauchst Admin-Rechte.');
+    }
+
+    const role = message.mentions.roles.first();
+
+    if (!role) {
+      await JoinRole2.deleteOne({ guildId: message.guild.id });
+      await message.react('✅').catch(() => {});
+      return message.reply('✅ Join-Role wurde entfernt.');
+    }
+
+    const data = await JoinRole2.findOne({ guildId: message.guild.id });
+    if (data && data.roleId === role.id) {
+      await JoinRole2.deleteOne({ guildId: message.guild.id });
+    }
+
+    await message.react('✅').catch(() => {});
+    return message.reply(`✅ Join-Role <@&${role.id}> wurde entfernt.`);
+  }
+});
+
+client.on('guildMemberAdd', async (member) => {
+  try {
+    const data = await JoinRole2.findOne({ guildId: member.guild.id });
+    if (!data) return;
+    const role = member.guild.roles.cache.get(data.roleId);
+    if (!role) return;
+    await member.roles.add(role).catch(() => {});
+  } catch (e) { console.log('JoinRole Fehler:', e); }
+});
