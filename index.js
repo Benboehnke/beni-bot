@@ -25,13 +25,31 @@ const levelRoleSchema = new mongoose.Schema({
 });
 const LevelRole = mongoose.model('LevelRole', levelRoleSchema);
 
+// ===== NEU: ALLES WAS VORHER VERLOREN GING - JETZT IN MONGO =====
+const welcomeSchema = new mongoose.Schema({ guildId: String, channelId: String });
+const WelcomeConfig = mongoose.model('WelcomeConfig', welcomeSchema);
+
+const logSchema = new mongoose.Schema({ guildId: String, channelId: String });
+const LogConfig = mongoose.model('LogConfig', logSchema);
+
+const reportSchema = new mongoose.Schema({ guildId: String, channelIds: { type: [String], default: [] } });
+const ReportConfig = mongoose.model('ReportConfig', reportSchema);
+
+const blacklistRoleSchema = new mongoose.Schema({ guildId: String, roleId: String });
+const BlacklistRoleConfig = mongoose.model('BlacklistRoleConfig', blacklistRoleSchema);
+
+const blacklistDataSchema = new mongoose.Schema({ guildId: String, userId: String, oldRoles: { type: [String], default: [] } });
+const BlacklistData = mongoose.model('BlacklistData', blacklistDataSchema);
+
+const MultiplierSchema = new mongoose.Schema({ guildId: String, roleId: String, multiplier: Number });
+const Multiplier = mongoose.model('Multiplier', MultiplierSchema);
+
 function getNeededXp(level) {
   return 5 * (level ** 2) + 50 * level + 100;
 }
 
 const { Client, GatewayIntentBits, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const http = require('http');
-const fs = require('fs');
 
 console.log('Bot startet...');
 
@@ -71,16 +89,22 @@ function onReady() {
 client.once('ready', onReady);
 client.once('clientReady', onReady);
 
-// ===== STORAGE =====
-const blacklistRoles = new Map();
-const blacklistData = new Map();
-const welcomeChannels = new Map();
-let logChannels = {};
-if (fs.existsSync('./logchannels.json')) {
-  try { logChannels = JSON.parse(fs.readFileSync('./logchannels.json', 'utf8')); } catch (e) { logChannels = {}; }
+// ===== HELPERS FÜR MONGO CONFIGS =====
+async function getWelcomeChannel(guildId) {
+  const c = await WelcomeConfig.findOne({ guildId });
+  return c?.channelId || null;
 }
-function saveLogChannels() {
-  fs.writeFileSync('./logchannels.json', JSON.stringify(logChannels, null, 2));
+async function getLogChannel(guildId) {
+  const c = await LogConfig.findOne({ guildId });
+  return c?.channelId || null;
+}
+async function getReportChannels(guildId) {
+  const c = await ReportConfig.findOne({ guildId });
+  return c?.channelIds || [];
+}
+async function getBlacklistRoleId(guildId) {
+  const c = await BlacklistRoleConfig.findOne({ guildId });
+  return c?.roleId || null;
 }
 
 async function deleteAfter(msg) {
@@ -123,9 +147,9 @@ client.on('interactionCreate', async (interaction) => {
 
 // ===== WELCOME =====
 client.on('guildMemberAdd', async (member) => {
-  const channelId = welcomeChannels.get(member.guild.id);
+  const channelId = await getWelcomeChannel(member.guild.id);
   if (!channelId) return;
-  const channel = member.guild.channels.cache.get(channelId);
+  const channel = member.guild.channels.cache.get(channelId) || await member.guild.channels.fetch(channelId).catch(() => null);
   if (!channel) return;
   channel.send(`Willkommen ${member} zu **${member.guild.name}**!`);
 });
@@ -136,9 +160,9 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
     if (!oldMsg.guild) return;
     if (oldMsg.author?.bot) return;
     if (oldMsg.content === newMsg.content) return;
-    const logId = logChannels[oldMsg.guild.id];
+    const logId = await getLogChannel(oldMsg.guild.id);
     if (!logId) return;
-    const logCh = oldMsg.guild.channels.cache.get(logId);
+    const logCh = oldMsg.guild.channels.cache.get(logId) || await oldMsg.guild.channels.fetch(logId).catch(() => null);
     if (!logCh) return;
     const embed = new EmbedBuilder()
       .setTitle('✏️ Nachricht bearbeitet')
@@ -160,9 +184,9 @@ client.on('messageDelete', async (msg) => {
   try {
     if (!msg.guild) return;
     if (msg.author?.bot) return;
-    const logId = logChannels[msg.guild.id];
+    const logId = await getLogChannel(msg.guild.id);
     if (!logId) return;
-    const logCh = msg.guild.channels.cache.get(logId);
+    const logCh = msg.guild.channels.cache.get(logId) || await msg.guild.channels.fetch(logId).catch(() => null);
     if (!logCh) return;
     const embed = new EmbedBuilder()
       .setTitle('🗑️ Nachricht gelöscht')
@@ -188,9 +212,9 @@ client.on('messageCreate', async (message) => {
   // ----- LOGGER: Gesendete Nachrichten -----
   try {
     if (!message.content.toLowerCase().startsWith('!messagelog') && !message.content.toLowerCase().startsWith('!dashboard')) {
-      const logId = logChannels[message.guild.id];
+      const logId = await getLogChannel(message.guild.id);
       if (logId && message.channel.id !== logId) {
-        const logCh = message.guild.channels.cache.get(logId);
+        const logCh = message.guild.channels.cache.get(logId) || await message.guild.channels.fetch(logId).catch(() => null);
         if (logCh) {
           const embed = new EmbedBuilder()
             .setTitle('📤 Nachricht gesendet')
@@ -354,7 +378,7 @@ client.on('messageCreate', async (message) => {
         { name: '🆔 USER', value: '`!id @User`', inline: false },
         { name: '🏆 LEVEL', value: '`!rank`\n`!leaderboard`\n`!leveldashboard`\n`!levelups #channel`\n`!removelevelup`\n`!setlevelrole 5 @Role`\n`!removelevelrole 5`', inline: false },
         { name: '📊 STATS', value: '`!stats`\n`!as`\n`!dashboard`\n`!messagelog #channel`\n`!partnership Link`\n`!enablewm #channel`\n`!disablewm`', inline: false },
-        { name: '✅ SONSTIGES', value: '`!ping`\n`!hallo`\n`!owner`\n`!help`\n`!remember Zeit Text`', inline: false },
+        { name: '✅ SONSTIGES', value: '`!ping`\n`!hallo`\n`!owner`\n`!help`\n`!remember Zeit Text`\n`!distanze`', inline: false },
         { name: '⏰ MUTE ZEITEN', value: '`10s` = Sekunden, `10m` = Minuten, `1h` = Stunden, `1d` = Tage', inline: false }
       )
       .setFooter({ text: 'Beni Bot • Alle Commands löschen sich nach 3 Sek' });
@@ -404,6 +428,18 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
+  // ----- !distanze / !distanz -----
+  if (command === '!distanze' || command === '!distanz') {
+    await message.react('✅').catch(() => {});
+    const embed = new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('DISTANZE!')
+      .setDescription(`Wir **${message.guild.name}** distanzieren uns von der gesagten Aussage und unterstützen sie nicht!`)
+      .setThumbnail(message.guild.iconURL())
+      .setTimestamp();
+    return message.channel.send({ embeds: [embed] });
+  }
+
   // ----- !enablewm / !disablewm -----
   if (command === '!enablewm' || command === '!disablewm') {
     setTimeout(() => { message.delete().catch(() => {}); }, 3000);
@@ -421,19 +457,20 @@ client.on('messageCreate', async (message) => {
         message.channel.send({ embeds: [err] });
         return;
       }
-      welcomeChannels.set(message.guild.id, channel.id);
+      await WelcomeConfig.findOneAndUpdate({ guildId: message.guild.id }, { channelId: channel.id }, { upsert: true, new: true });
       await message.react('✅').catch(() => {});
       const onEmbed = new EmbedBuilder().setColor(0x00C853).setTitle('✅ Welcome Message AN!').setDescription(`Neue Mitglieder werden jetzt in ${channel} begrüßt!`).setFooter({ text: `Aktiviert von ${message.author.tag}` }).setTimestamp();
       message.channel.send({ embeds: [onEmbed] });
     }
     if (command === '!disablewm') {
-      if (!welcomeChannels.has(message.guild.id)) {
+      const existing = await WelcomeConfig.findOne({ guildId: message.guild.id });
+      if (!existing) {
         await message.react('❌').catch(() => {});
         const err = new EmbedBuilder().setColor(0xFFAA00).setTitle('⚠️ War schon aus!').setDescription('Welcome Message war schon aus.').setTimestamp();
         message.channel.send({ embeds: [err] });
         return;
       }
-      welcomeChannels.delete(message.guild.id);
+      await WelcomeConfig.findOneAndDelete({ guildId: message.guild.id });
       await message.react('✅').catch(() => {});
       const offEmbed = new EmbedBuilder().setColor(0xFF0000).setTitle('❌ Welcome Message AUS!').setDescription('Neue Mitglieder werden nicht mehr begrüßt.').setFooter({ text: `Deaktiviert von ${message.author.tag}` }).setTimestamp();
       message.channel.send({ embeds: [offEmbed] });
@@ -475,15 +512,15 @@ client.on('messageCreate', async (message) => {
     if (args[0]?.toLowerCase() === 'off') {
       await message.react('✅').catch(() => {});
       await new Promise(r => setTimeout(r, 400));
-      if (!logChannels[message.guild.id]) return message.channel.send({ embeds: [new EmbedBuilder().setTitle('⚠️ MESSAGE LOG - NICHT AKTIV').setDescription('Message Log war gar nicht aktiviert.\nAktiviere es mit: `!messagelog #channel`').setColor(0xFFAA00).setTimestamp()] });
-      delete logChannels[message.guild.id];
-      saveLogChannels();
+      const existing = await LogConfig.findOne({ guildId: message.guild.id });
+      if (!existing) return message.channel.send({ embeds: [new EmbedBuilder().setTitle('⚠️ MESSAGE LOG - NICHT AKTIV').setDescription('Message Log war gar nicht aktiviert.\nAktiviere es mit: `!messagelog #channel`').setColor(0xFFAA00).setTimestamp()] });
+      await LogConfig.findOneAndDelete({ guildId: message.guild.id });
       return message.channel.send({ embeds: [new EmbedBuilder().setTitle('❌ MESSAGE LOG DEAKTIVIERT').setDescription('Es werden ab jetzt **keine** Nachrichten mehr geloggt.').addFields({ name: '👤 Deaktiviert von', value: `${message.author}`, inline: true }, { name: '🔁 Wieder aktivieren', value: '`!messagelog #channel`', inline: true }).setColor(0xFF0000).setFooter({ text: 'BENI BOT • Message Log System' }).setTimestamp()] });
     }
     if (args[0]?.toLowerCase() === 'status') {
       await message.react('✅').catch(() => {});
       await new Promise(r => setTimeout(r, 400));
-      const currentId = logChannels[message.guild.id];
+      const currentId = await getLogChannel(message.guild.id);
       if (!currentId) return message.channel.send('⚠️ Message Log ist **nicht** aktiviert.\nAktiviere mit: `!messagelog #channel`');
       const ch = message.guild.channels.cache.get(currentId);
       return message.channel.send(`✅ Message Log ist aktiv in: ${ch ? ch : 'Unbekannter Channel'}`);
@@ -504,8 +541,7 @@ client.on('messageCreate', async (message) => {
       }
       await message.react('✅').catch(() => {});
       await new Promise(r => setTimeout(r, 600));
-      logChannels[message.guild.id] = targetChannel.id;
-      saveLogChannels();
+      await LogConfig.findOneAndUpdate({ guildId: message.guild.id }, { channelId: targetChannel.id }, { upsert: true, new: true });
       const successEmbed = new EmbedBuilder()
         .setTitle('✅ MESSAGE LOG AKTIVIERT')
         .setDescription(`Das Message Log wurde erfolgreich eingerichtet!\n\nAlle Nachrichten werden jetzt in ${targetChannel} geloggt.`)
@@ -631,14 +667,14 @@ client.on('messageCreate', async (message) => {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply('❌ You need Manage Roles!').then(m=>deleteAfter(m));
     deleteAfter(message);
     const role = message.mentions.roles.first(); if(!role) return message.reply('❌ Usage: `!addBLrole @role`').then(m=>deleteAfter(m));
-    blacklistRoles.set(message.guild.id, role.id);
+    await BlacklistRoleConfig.findOneAndUpdate({ guildId: message.guild.id }, { roleId: role.id }, { upsert: true, new: true });
     const e = new EmbedBuilder().setTitle('✅ Blacklist Role Set').setDescription(`Blacklist Role is now: ${role}`).setColor(0x00FF00);
     return message.channel.send({ embeds: [e] });
   }
   if (command === '!removeblrole') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply('❌ You need Manage Roles!').then(m=>deleteAfter(m));
     deleteAfter(message);
-    blacklistRoles.delete(message.guild.id);
+    await BlacklistRoleConfig.findOneAndDelete({ guildId: message.guild.id });
     return message.channel.send('✅ Blacklist Role removed!');
   }
   if (command === '!blacklist') {
@@ -646,11 +682,11 @@ client.on('messageCreate', async (message) => {
     deleteAfter(message);
     const target = message.mentions.members.first(); if(!target) return message.reply('❌ Usage: `!blacklist @member Reason`').then(m=>deleteAfter(m));
     if (target.id === message.author.id) return message.reply('❌ You cannot blacklist yourself!').then(m=>deleteAfter(m));
-    let blRoleId = blacklistRoles.get(message.guild.id);
+    let blRoleId = await getBlacklistRoleId(message.guild.id);
     let blRole = blRoleId ? message.guild.roles.cache.get(blRoleId) : message.guild.roles.cache.find(r => r.name.toLowerCase() === 'blacklist');
     if (!blRole) { try { blRole = await message.guild.roles.create({ name: 'Blacklist', color: 0x000000, reason: 'Auto created Blacklist Role' }); } catch { return message.reply('❌ Could not create Blacklist Role!').then(m=>deleteAfter(m)); } }
     const oldRoles = target.roles.cache.filter(r => r.id !== message.guild.id).map(r => r.id);
-    blacklistData.set(`${message.guild.id}-${target.id}`, oldRoles);
+    await BlacklistData.findOneAndUpdate({ guildId: message.guild.id, userId: target.id }, { oldRoles }, { upsert: true, new: true });
     try { await target.roles.remove(oldRoles).catch(()=>{}); await target.roles.add(blRole).catch(()=>{}); await target.timeout(28*24*60*60*1000, 'Blacklisted').catch(()=>{}); } catch { return message.reply('❌ Error!').then(m=>deleteAfter(m)); }
     const reason = args.slice(1).join(' ') || 'No reason';
     const e = new EmbedBuilder().setTitle('⛔ User Blacklisted').setDescription(`${target} has been blacklisted.\n\n**Reason:** ${reason}\n**All roles removed**\n**Timeout:** 28 Days (Infinite)\n**Role:** ${blRole}`).setColor(0x000000).setFooter({ text: `By ${message.author.tag}` });
@@ -660,10 +696,11 @@ client.on('messageCreate', async (message) => {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return message.reply('❌ You need Moderate Members!').then(m=>deleteAfter(m));
     deleteAfter(message);
     const target = message.mentions.members.first(); if(!target) return message.reply('❌ Usage: `!free @member`').then(m=>deleteAfter(m));
-    let blRoleId = blacklistRoles.get(message.guild.id);
+    let blRoleId = await getBlacklistRoleId(message.guild.id);
     let blRole = blRoleId ? message.guild.roles.cache.get(blRoleId) : message.guild.roles.cache.find(r => r.name.toLowerCase() === 'blacklist');
-    const key = `${message.guild.id}-${target.id}`; const oldRoles = blacklistData.get(key) || [];
-    try { if(blRole) await target.roles.remove(blRole).catch(()=>{}); await target.timeout(null).catch(()=>{}); if(oldRoles.length>0) await target.roles.add(oldRoles).catch(()=>{}); blacklistData.delete(key); } catch { return message.reply('❌ Error freeing!').then(m=>deleteAfter(m)); }
+    const saved = await BlacklistData.findOne({ guildId: message.guild.id, userId: target.id });
+    const oldRoles = saved?.oldRoles || [];
+    try { if(blRole) await target.roles.remove(blRole).catch(()=>{}); await target.timeout(null).catch(()=>{}); if(oldRoles.length>0) await target.roles.add(oldRoles).catch(()=>{}); await BlacklistData.findOneAndDelete({ guildId: message.guild.id, userId: target.id }); } catch { return message.reply('❌ Error freeing!').then(m=>deleteAfter(m)); }
     const e = new EmbedBuilder().setTitle('✅ User Freed').setDescription(`${target} has been freed.\nOld roles restored.`).setColor(0x00FF00);
     return message.channel.send({ embeds: [e] });
   }
@@ -683,39 +720,7 @@ client.on('messageCreate', async (message) => {
 
 });
 
-// ===== LOGIN =====
-const MYTOKEN = (process.env.DISCORD_TOKEN || process.env.TOKEN || '').trim();
-if (MYTOKEN) {
-  console.log('Token found successfully');
-  console.log('Token Länge:', MYTOKEN.length);
-  console.log('Versuche jetzt Login...');
-} else {
-  console.log('Token NOT found!');
-}
-client.login(MYTOKEN)
-  .then(() => console.log('Login-Anfrage an Discord geschickt...'))
-  .catch(e => {
-    console.log('LOGIN FEHLER:', e.message);
-    console.log('GANZER FEHLER:', e);
-  });
-
-console.log('Teste Discord Verbindung per HTTPS...');
-fetch('https://discord.com/api/v10/users/@me', {
-  headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` }
-}).then(async r => {
-  console.log('HTTPS TEST Status:', r.status);
-  console.log('HTTPS TEST Antwort:', (await r.text()).slice(0, 200));
-}).catch(e => console.log('HTTPS TEST FEHLER:', e.message));
-
 // ===== REPORT SYSTEM =====
-let reportChannels = {};
-if (fs.existsSync('./reportchannels.json')) {
-  try { reportChannels = JSON.parse(fs.readFileSync('./reportchannels.json', 'utf8')); } catch (e) { reportChannels = {}; }
-}
-function saveReportChannels() {
-  fs.writeFileSync('./reportchannels.json', JSON.stringify(reportChannels, null, 2));
-}
-
 const REPORT_WORDS = [
   "hurensohn", "huso", "wichser", "arschloch", "fotze", "bastard",
   "idiot", "spast", "behindert", "missgeburt", "schlampe", "hure",
@@ -739,7 +744,7 @@ function highlightReportWords(text) {
 }
 
 async function sendReportEmbed(guild, reportedUser, reporter, reasonText, channelObj, messageUrl, type) {
-  const ids = reportChannels[guild.id] || [];
+  const ids = await getReportChannels(guild.id);
   if (ids.length === 0) return false;
   const found = findReportWords(reasonText);
   const embed = new EmbedBuilder()
@@ -757,7 +762,7 @@ async function sendReportEmbed(guild, reportedUser, reporter, reasonText, channe
     .setFooter({ text: `User ID: ${reportedUser.id} | Beni Bot Report System` })
     .setTimestamp();
   for (const cid of ids) {
-    const ch = guild.channels.cache.get(cid);
+    const ch = guild.channels.cache.get(cid) || await guild.channels.fetch(cid).catch(() => null);
     if (!ch) continue;
     const msg = await ch.send({ embeds: [embed] }).catch(() => null);
     if (msg) {
@@ -779,24 +784,24 @@ client.on('messageCreate', async (message) => {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
     const channel = message.mentions.channels.first();
     if (!channel) return fail(message, 'Benutzung: `!addchannelreport #channel`');
-    if (!reportChannels[message.guild.id]) reportChannels[message.guild.id] = [];
-    if (reportChannels[message.guild.id].includes(channel.id)) return fail(message, `${channel} ist schon ein Report-Channel!`);
-    reportChannels[message.guild.id].push(channel.id);
-    saveReportChannels();
+    const existing = await ReportConfig.findOne({ guildId: message.guild.id });
+    const ids = existing?.channelIds || [];
+    if (ids.includes(channel.id)) return fail(message, `${channel} ist schon ein Report-Channel!`);
+    await ReportConfig.findOneAndUpdate({ guildId: message.guild.id }, { $push: { channelIds: channel.id } }, { upsert: true, new: true });
     return success(message, `${channel} wurde als **Report-Channel** hinzugefügt!\nAlle Reports / Beleidigungen landen jetzt da.`);
   }
   if (command === '!removechannelreport') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
     const channel = message.mentions.channels.first();
     if (!channel) return fail(message, 'Benutzung: `!removechannelreport #channel`');
-    if (!reportChannels[message.guild.id] || !reportChannels[message.guild.id].includes(channel.id)) return fail(message, `${channel} ist kein Report-Channel!`);
-    reportChannels[message.guild.id] = reportChannels[message.guild.id].filter(id => id !== channel.id);
-    saveReportChannels();
+    const ids = await getReportChannels(message.guild.id);
+    if (!ids.includes(channel.id)) return fail(message, `${channel} ist kein Report-Channel!`);
+    await ReportConfig.findOneAndUpdate({ guildId: message.guild.id }, { $pull: { channelIds: channel.id } });
     return success(message, `${channel} wurde als **Report-Channel entfernt**!`);
   }
   if (command === '!reportchannelstatus') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
-    const ids = reportChannels[message.guild.id] || [];
+    const ids = await getReportChannels(message.guild.id);
     if (ids.length === 0) return fail(message, 'Es ist kein Report-Channel gesetzt!\nSetze einen mit: `!addchannelreport #channel`');
     const list = ids.map(id => {
       const ch = message.guild.channels.cache.get(id);
@@ -816,7 +821,7 @@ client.on('messageCreate', async (message) => {
   if (!command.startsWith('!')) {
     const found = findReportWords(message.content);
     if (found.length > 0) {
-      const ids = reportChannels[message.guild.id] || [];
+      const ids = await getReportChannels(message.guild.id);
       if (ids.includes(message.channel.id)) return;
       await sendReportEmbed(message.guild, message.author, null, message.content, message.channel, message.url, 'auto');
     }
@@ -921,7 +926,20 @@ client.on('messageCreate', async (message) => {
     try {
       let user = await Level.findOne({ userId: message.author.id, guildId: message.guild.id });
       if (!user) user = new Level({ userId: message.author.id, guildId: message.guild.id });
-      user.xp += Math.floor(Math.random() * 11) + 5;
+
+      // Multiplier checken
+      let mult = 1;
+      try {
+        const member = await message.guild.members.fetch(message.author.id).catch(() => null);
+        if (member) {
+          const mults = await Multiplier.find({ guildId: message.guild.id });
+          for (const m of mults) {
+            if (member.roles.cache.has(m.roleId)) mult = Math.max(mult, m.multiplier);
+          }
+        }
+      } catch {}
+
+      user.xp += Math.floor((Math.floor(Math.random() * 11) + 5) * mult);
       const needed = getNeededXp(user.level);
       if (user.xp >= needed) {
         user.level += 1;
@@ -1076,14 +1094,7 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-// ===== LEVEL SYSTEM ERWEITERUNG - EINFACH UNTEN DRAN =====
-const MultiplierSchema = new mongoose.Schema({
-  guildId: String,
-  roleId: String,
-  multiplier: Number
-});
-const Multiplier = mongoose.model('Multiplier', MultiplierSchema);
-
+// ===== LEVEL SYSTEM ERWEITERUNG =====
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   const args = message.content.trim().split(/ +/);
@@ -1149,7 +1160,6 @@ client.on('messageCreate', async (message) => {
     const oldLevel = user.level;
     user.xp += amount;
 
-    // Level-Ups checken (auch mehrere auf einmal)
     let leveledUp = false;
     while (user.xp >= getNeededXp(user.level)) {
       user.xp -= getNeededXp(user.level);
@@ -1177,26 +1187,31 @@ client.on('messageCreate', async (message) => {
       if (targetChannel) targetChannel.send({ embeds: [levelEmbed] }).catch(() => {});
     }
 
-    // ===== !DISTANZE COMMAND =====
-client.on('messageCreate', async (message) => {
-  if (message.author.bot || !message.guild) return;
-  const command = message.content.trim().toLowerCase().split(/ +/)[0];
-
-  if (command === '!distanze' || command === '!distanz') {
-    // ✅ Haken auf deine Message
-    await message.react('✅').catch(() => {});
-
-    const embed = new EmbedBuilder()
-      .setColor('#FF0000')
-      .setTitle('DISTANZE!')
-      .setDescription(`Wir **${message.guild.name}** distanzieren uns von der gesagten Aussage und unterstützen sie nicht!`)
-      .setThumbnail(message.guild.iconURL())
-      .setTimestamp();
-
-    return message.channel.send({ embeds: [embed] });
-  }
-});
     const embed = new EmbedBuilder().setColor('#00FF88').setTitle('✨ XP gegeben').setDescription(`${target} hat **${amount} XP** erhalten.\nJetzt: **Level ${user.level} | ${user.xp} / ${getNeededXp(user.level)} XP**${user.level > oldLevel ? `\n🎉 Level-Up von ${oldLevel} → ${user.level}!` : ''}`).setThumbnail(target.displayAvatarURL()).setTimestamp();
     return message.channel.send({ embeds: [embed] });
   }
 });
+
+// ===== LOGIN =====
+const MYTOKEN = (process.env.DISCORD_TOKEN || process.env.TOKEN || '').trim();
+if (MYTOKEN) {
+  console.log('Token found successfully');
+  console.log('Token Länge:', MYTOKEN.length);
+  console.log('Versuche jetzt Login...');
+} else {
+  console.log('Token NOT found!');
+}
+client.login(MYTOKEN)
+  .then(() => console.log('Login-Anfrage an Discord geschickt...'))
+  .catch(e => {
+    console.log('LOGIN FEHLER:', e.message);
+    console.log('GANZER FEHLER:', e);
+  });
+
+console.log('Teste Discord Verbindung per HTTPS...');
+fetch('https://discord.com/api/v10/users/@me', {
+  headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` }
+}).then(async r => {
+  console.log('HTTPS TEST Status:', r.status);
+  console.log('HTTPS TEST Antwort:', (await r.text()).slice(0, 200));
+}).catch(e => console.log('HTTPS TEST FEHLER:', e.message))
