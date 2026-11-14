@@ -75,7 +75,12 @@ setTimeout(() => {
   if (!client.user) console.log('LOGIN HÄNGT! Nach 15 Sekunden immer noch nicht eingeloggt!');
 }, 15000);
 
-
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Beni Bot läuft!');
+}).listen(process.env.PORT || 10000, () => {
+  console.log('Webserver läuft auf Port 10000');
+});
 
 function onReady() {
   console.log(`Eingeloggt als ${client.user.tag}`);
