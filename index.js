@@ -1075,3 +1075,109 @@ client.on('messageCreate', async (message) => {
     return message.channel.send({ embeds: [embed] });
   }
 });
+
+// ===== LEVEL SYSTEM ERWEITERUNG - EINFACH UNTEN DRAN =====
+const MultiplierSchema = new mongoose.Schema({
+  guildId: String,
+  roleId: String,
+  multiplier: Number
+});
+const Multiplier = mongoose.model('Multiplier', MultiplierSchema);
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  const args = message.content.trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+  if (!command.startsWith('!')) return;
+
+  // --- !multiplier ---
+  if (command === '!multiplier') {
+    if (!message.member.permissions.has('Administrator')) return message.reply('Nur Admins!');
+
+    if (args[0]?.toLowerCase() === 'list') {
+      const all = await Multiplier.find({ guildId: message.guild.id });
+      if (all.length === 0) return message.reply('Keine Multiplier gesetzt.');
+      let desc = all.map(m => `<@&${m.roleId}> → **${m.multiplier}x XP**`).join('\n');
+      const embed = new EmbedBuilder().setColor('#FFAA00').setTitle('✨ XP-Multiplier').setDescription(desc).setTimestamp();
+      return message.channel.send({ embeds: [embed] });
+    }
+
+    const role = message.mentions.roles.first();
+    const amount = parseFloat(args[1]);
+    if (!role || isNaN(amount)) return message.reply('Benutzung: `!multiplier @Role 2`\n`!multiplier list`\n`!multiplier @Role 1` = entfernen');
+
+    if (amount <= 1) {
+      await Multiplier.findOneAndDelete({ guildId: message.guild.id, roleId: role.id });
+      const embed = new EmbedBuilder().setColor('#FF5555').setTitle('❌ Multiplier entfernt').setDescription(`Für ${role} gibt es jetzt keinen Multiplier mehr (1x).`).setTimestamp();
+      return message.channel.send({ embeds: [embed] });
+    }
+
+    await Multiplier.findOneAndUpdate(
+      { guildId: message.guild.id, roleId: role.id },
+      { multiplier: amount },
+      { upsert: true, new: true }
+    );
+    const embed = new EmbedBuilder().setColor('#00FF88').setTitle('✅ Multiplier gesetzt').setDescription(`${role} bekommt jetzt **${amount}x XP** bei jeder Nachricht.`).setTimestamp();
+    return message.channel.send({ embeds: [embed] });
+  }
+
+  // --- !resetxp ---
+  if (command === '!resetxp') {
+    if (!message.member.permissions.has('Administrator')) return message.reply('Nur Admins!');
+    const target = message.mentions.users.first();
+    if (!target) return message.reply('Benutzung: `!resetXP @User`');
+    await Level.findOneAndUpdate(
+      { userId: target.id, guildId: message.guild.id },
+      { xp: 0, level: 0 },
+      { upsert: true, new: true }
+    );
+    const embed = new EmbedBuilder().setColor('#FF5555').setTitle('🔄 XP zurückgesetzt').setDescription(`${target} wurde auf **Level 0 | 0 XP** zurückgesetzt.`).setThumbnail(target.displayAvatarURL()).setTimestamp();
+    return message.channel.send({ embeds: [embed] });
+  }
+
+  // --- !givexp ---
+  if (command === '!givexp') {
+    if (!message.member.permissions.has('Administrator')) return message.reply('Nur Admins!');
+    const target = message.mentions.users.first();
+    const amount = parseInt(args[1]);
+    if (!target || isNaN(amount)) return message.reply('Benutzung: `!givexp @User 500`');
+    if (amount <= 0) return message.reply('Die Anzahl muss über 0 sein.');
+
+    let user = await Level.findOne({ userId: target.id, guildId: message.guild.id });
+    if (!user) user = new Level({ userId: target.id, guildId: message.guild.id });
+
+    const oldLevel = user.level;
+    user.xp += amount;
+
+    // Level-Ups checken (auch mehrere auf einmal)
+    let leveledUp = false;
+    while (user.xp >= getNeededXp(user.level)) {
+      user.xp -= getNeededXp(user.level);
+      user.level += 1;
+      leveledUp = true;
+    }
+    await user.save();
+
+    if (leveledUp) {
+      const member = await message.guild.members.fetch(target.id).catch(() => null);
+      const config = await GuildConfig.findOne({ guildId: message.guild.id });
+      const targetChannel = config?.levelupChannelId ? await message.guild.channels.fetch(config.levelupChannelId).catch(() => null) : message.channel;
+      let roleText = '';
+      try {
+        const levelRole = await LevelRole.findOne({ guildId: message.guild.id, level: user.level });
+        if (levelRole) {
+          const role = message.guild.roles.cache.get(levelRole.roleId);
+          if (member && role) {
+            await member.roles.add(role).catch(() => {});
+            roleText = `\n🎭 Du hast die Rolle ${role} erhalten!`;
+          }
+        }
+      } catch {}
+      const levelEmbed = new EmbedBuilder().setColor('#00FF88').setTitle('🎉 LEVEL UP!').setDescription(`GG ${target}! Du bist jetzt **Level ${user.level}**!${roleText}`).setThumbnail(target.displayAvatarURL()).setTimestamp();
+      if (targetChannel) targetChannel.send({ embeds: [levelEmbed] }).catch(() => {});
+    }
+
+    const embed = new EmbedBuilder().setColor('#00FF88').setTitle('✨ XP gegeben').setDescription(`${target} hat **${amount} XP** erhalten.\nJetzt: **Level ${user.level} | ${user.xp} / ${getNeededXp(user.level)} XP**${user.level > oldLevel ? `\n🎉 Level-Up von ${oldLevel} → ${user.level}!` : ''}`).setThumbnail(target.displayAvatarURL()).setTimestamp();
+    return message.channel.send({ embeds: [embed] });
+  }
+});
