@@ -1294,3 +1294,64 @@ client.on('guildMemberAdd', async (member) => {
     await member.roles.add(role).catch(() => {});
   } catch (e) { console.log('JoinRole Fehler:', e); }
 });
+
+// ===== SELF-HEALING - BOT MACHT EINFACH WEITER OHNE REDEPLOY - UNTEN DRAN =====
+
+let isReconnecting = false;
+
+// 1. Alle Fehler abfangen - Bot stirbt nie wegen 1 Fehler
+process.on('uncaughtException', (err) => {
+  console.log('❌ Fehler abgefangen, Bot läuft weiter:', err.message);
+});
+process.on('unhandledRejection', (err) => {
+  console.log('❌ Promise Fehler abgefangen, Bot läuft weiter:', err?.message || err);
+});
+client.on('error', (err) => console.log('❌ Discord Fehler, läuft weiter:', err.message));
+client.on('shardError', (err) => console.log('❌ Shard Fehler, läuft weiter:', err.message));
+
+// 2. Auto-Reconnect wenn Discord die Verbindung killt
+async function autoReconnect(reason) {
+  if (isReconnecting) return;
+  isReconnecting = true;
+  console.log(`⚠️ Verbindung weg (${reason}) - versuche Reconnect in 5 Sek...`);
+
+  setTimeout(async () => {
+    try {
+      // Erstmal sauber trennen
+      try { await client.destroy(); } catch(e) {}
+      // Neu einloggen - OHNE Redeploy
+      await client.login(process.env.TOKEN);
+      console.log('✅ Reconnect erfolgreich - Bot ist wieder da ohne Redeploy!');
+    } catch (e) {
+      console.log('❌ Reconnect fehlgeschlagen, versuche es gleich nochmal:', e.message);
+      isReconnecting = false;
+      // Nochmal in 10 Sek versuchen
+      setTimeout(() => autoReconnect('retry'), 10000);
+      return;
+    }
+    isReconnecting = false;
+  }, 5000);
+}
+
+client.on('disconnect', () => autoReconnect('disconnect'));
+client.on('shardDisconnect', () => autoReconnect('shardDisconnect'));
+
+// 3. Watchdog - checkt alle 30 Sek ob der Bot noch lebt
+setInterval(async () => {
+  // 0 = READY, alles gut
+  if (client.ws.status !== 0 || !client.user) {
+    console.log(`💔 Watchdog: Bot hängt! Status: ${client.ws.status} - starte neu...`);
+    autoReconnect('watchdog');
+  } else {
+    console.log(`💓 Watchdog: Alles gut - ${client.user.tag} online - Ping: ${client.ws.ping}ms`);
+  }
+}, 30 * 1000);
+
+// 4. Alle 10 Min selbst pingen, damit Render / Discord die Verbindung nicht killt
+setInterval(() => {
+  if (client.user) {
+    client.user.setActivity('Online ✅ | !help', { type: 4 }).catch(() => {});
+  }
+}, 10 * 60 * 1000);
+
+console.log('✅ Self-Healing aktiviert - Bot startet sich jetzt selbst neu ohne Redeploy');
