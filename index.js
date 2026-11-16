@@ -1466,8 +1466,7 @@ client.on('messageCreate', async (message) => {
       new ButtonBuilder().setLabel('🚀 Join unseren Discord!').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH')
     );
     const r = await message.channel.send({ embeds: [embed], components: [row] });
-    deleteAfter(r);
-    deleteAfter(message);
+    
     return;
   }
 
@@ -1524,8 +1523,7 @@ client.on('messageCreate', async (message) => {
         .setTimestamp()
       ]
     });
-    deleteAfter(r);
-    return;
+  
   }
 
   // ==========================================================================
