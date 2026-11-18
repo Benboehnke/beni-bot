@@ -2253,40 +2253,55 @@ if (command === '!id') {
   // ==========================================================================
   // LEVEL - !rank
   // ==========================================================================
-if (command === 'rank') {
-  const target = message.mentions.users.first() || message.author;
-  const t = message.guild.members.cache.get(target.id) || await message.guild.members.fetch(target.id).catch(() => null);
-  const u = await getOrCreateLevel(target.id, message.guild.id);
-  const need = getNeededXp(u.level);
-  const all = await Level.find({ guildId: message.guild.id }).sort({ level: -1, xp: -1 });
-  let pos = all.findIndex(x => x.userId === target.id) + 1;
-  if (pos === 0) pos = 1;
-  const pct = Math.floor((u.xp / need) * 100);
-  const filled = Math.floor(pct / 10);
-  let bar = '';
-  for (let i = 0; i < 10; i++) {
-    if (i < filled) bar += '█';
-    else bar += '░';
-  }
-  await embedReply(message,
-    'Rank - ' + target.username,
-    'Dein aktueller Rank auf diesem Server',
-    0x00AAFF,
-    false,
-    {
-      thumb: target.displayAvatarURL(),
-      fields: [
-        { name: '🏆 Level', value: '**' + u.level + '**', inline: true },
-        { name: '✨ XP', value: '**' + u.xp + ' / ' + need + '**', inline: true },
-        { name: '📊 Fortschritt', value: bar + ' ' + pct + '%', inline: false },
-        { name: '🏅 Platz', value: '**#' + pos + '** von ' + all.length, inline: true },
-        { name: '💬 Messages', value: '**' + (u.messages || 0) + '**', inline: true },
-        { name: '🎙️ Voice-Time', value: '**' + Math.floor((u.voiceTime || 0) / 3600000) + 'h ' + Math.floor(((u.voiceTime || 0) % 3600000) / 60000) + 'm**', inline: true }
-      ]
-    }
-  );
-}
+if (command === '!rank') {
+  const guildId = message.guild.id;
 
+  // Alle XP-Daten für diesen Server holen
+  const all = await db.all();
+  const guildData = all
+    .filter(d => d.ID.startsWith(`xp_${guildId}_`))
+    .map(d => {
+      const userId = d.ID.split('_')[2];
+      return { userId, xp: d.data };
+    })
+    .sort((a, b) => b.xp - a.xp);
+
+  // Top 10 Leaderboard bauen
+  let desc = '';
+  for (let i = 0; i < Math.min(guildData.length, 10); i++) {
+    const entry = guildData[i];
+    const member = await message.guild.members.fetch(entry.userId).catch(() => null);
+    const name = member ? member.user.username : 'Unbekannt';
+    const level = Math.floor(Math.sqrt(entry.xp / 100)) + 1;
+    const msgs = await db.get(`msgs_${guildId}_${entry.userId}`).catch(() => 0) || 0;
+
+    desc += `#${i + 1} ${name} - Level ${level} | ${entry.xp} XP | ${msgs} Nachrichten\n`;
+  }
+
+  if (!desc) desc = 'Noch keine XP auf diesem Server!';
+
+  // Dein eigener Rang
+  const myData = guildData.find(d => d.userId === message.author.id);
+  const myXp = myData ? myData.xp : 0;
+  const myLevel = Math.floor(Math.sqrt(myXp / 100)) + 1;
+  const myRank = myData ? guildData.findIndex(d => d.userId === message.author.id) + 1 : 'Kein Rang';
+  const myMsgs = await db.get(`msgs_${guildId}_${message.author.id}`).catch(() => 0) || 0;
+
+  const embed = new EmbedBuilder()
+    .setTitle('Beni Bot - Rangliste')
+    .setDescription(desc)
+    .addFields(
+      { name: 'Dein Rang', value: `#${myRank}`, inline: true },
+      { name: 'Dein Level', value: `${myLevel}`, inline: true },
+      { name: 'Deine XP', value: `${myXp} XP`, inline: true },
+      { name: 'Deine Nachrichten', value: `${myMsgs}`, inline: true }
+    )
+    .setColor('#2b2d31')
+    .setTimestamp();
+
+  await message.channel.send({ embeds: [embed] });
+  return;
+}
   // ==========================================================================
   // LEVEL - !leaderboard / !lb
   // ==========================================================================
