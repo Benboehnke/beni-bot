@@ -2278,7 +2278,7 @@ client.on('messageCreate', async (message) => {
   }
   const need = getNeededXp(u.level);
   const prog = Math.min(20, Math.max(0, Math.floor((u.xp / need) * 20)));
-  const bar = '█'.repeat(prog) + '░'.repeat(20 - prog);
+  const bar = '#'.repeat(prog) + '-'.repeat(20 - prog);
   const all = await Level.find({ guildId: message.guild.id }).sort({ level: -1, xp: -1 });
   const pos = all.findIndex(x => x.userId === t.id) + 1;
   await reactDone(message);
