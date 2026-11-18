@@ -1885,7 +1885,7 @@ client.on('messageCreate', async (message) => {
   // ==========================================================================
   // !id - UNSICHTBAR
   // ==========================================================================
-if (command === 'id') {
+if (command === '!id') {
   // Deine !id Nachricht sofort löschen, damit keiner sieht dass du !id benutzt hast
   await message.delete().catch(() => {});
 
