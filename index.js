@@ -2255,48 +2255,62 @@ if (command === '!id') {
   // ==========================================================================
 if (message.content.toLowerCase().startsWith('!rank')) {
   try {
-    // Deine Mongo-Collection holen - direkt über mongoose, ohne db-Variable
-    const collection = mongoose.connection.db.collection('levels');
-    
-    // Top 10 für diesen Server holen, nach XP sortiert
-    const guildData = await collection.find({ guildId: message.guild.id }).sort({ xp: -1 }).limit(10).toArray();
+    await message.react('✅').catch(() => {});
 
-    let desc = '';
-    for (let i = 0; i < guildData.length; i++) {
-      const entry = guildData[i];
-      const member = await message.guild.members.fetch(entry.userId).catch(() => null);
-      const name = member ? member.user.username : 'Unbekannt';
-      const level = entry.level || Math.floor(Math.sqrt((entry.xp || 0) / 100)) + 1;
-      const msgs = entry.messages || entry.msgs || 0;
-      desc += `#${i + 1} ${name} - Level ${level} | ${entry.xp || 0} XP | ${msgs} Nachrichten\n`;
+    const myData = await Level.findOne({ guildId: message.guild.id, userId: message.author.id });
+    if (!myData) {
+      const noXpEmbed = new EmbedBuilder()
+        .setTitle('🔵 BENI BOT - RANK')
+        .setDescription('Du hast noch keine XP!\nSchreib erstmal was im Chat.')
+        .setColor('#1a4dff')
+        .setThumbnail(message.author.displayAvatarURL());
+      return message.channel.send({ embeds: [noXpEmbed] });
     }
 
-    if (!desc) desc = 'Noch keine XP auf diesem Server!';
+    const myXp = myData.xp;
+    const myLevel = myData.level;
+    const betterCount = await Level.countDocuments({ guildId: message.guild.id, xp: { $gt: myXp } });
+    const myRank = betterCount + 1;
 
-    // Dein eigener Rang
-    const myData = await collection.findOne({ guildId: message.guild.id, userId: message.author.id });
-    const myXp = myData ? myData.xp : 0;
-    const myLevel = myData?.level || Math.floor(Math.sqrt(myXp / 100)) + 1;
-    
-    // Rang-Position zählen
-    const betterCount = await collection.countDocuments({ guildId: message.guild.id, xp: { $gt: myXp } });
-    const myRank = myData ? betterCount + 1 : 'Kein Rang';
+    // Messages + Voice Time aus deiner DB - wenn das Feld bei dir anders heißt, hier anpassen
+    const messages = myData.messages || myData.messageCount || myData.totalMessages || 0;
+    const voiceSeconds = myData.voiceTime || myData.voiceSeconds || myData.totalVoiceTime || 0;
+    const voiceHours = Math.floor(voiceSeconds / 3600);
+    const voiceMins = Math.floor((voiceSeconds % 3600) / 60);
+    const voiceText = voiceHours > 0 ? `${voiceHours}h ${voiceMins}m` : `${voiceMins}m`;
+
+    const xpForNextLevel = 5 * myLevel * myLevel + 50 * myLevel + 100;
+    const xpForCurrentLevel = 5 * (myLevel - 1) * (myLevel - 1) + 50 * (myLevel - 1) + 100;
+    const progressXp = myXp - xpForCurrentLevel;
+    const neededXp = xpForNextLevel - xpForCurrentLevel;
+    const percent = Math.max(0, Math.min(100, Math.floor((progressXp / neededXp) * 100)));
+    const left = neededXp - progressXp;
+
+    const filled = Math.floor(percent / 5);
+    const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
 
     const embed = new EmbedBuilder()
-      .setTitle('Beni Bot - Rangliste')
-      .setDescription(desc)
+      .setTitle('🔵 BENI BOT - RANK')
+      .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
+      .setThumbnail(message.author.displayAvatarURL())
+      .setColor('#1a4dff')
       .addFields(
-        { name: 'Dein Rang', value: `#${myRank}`, inline: true },
-        { name: 'Dein Level', value: `${myLevel}`, inline: true },
-        { name: 'Deine XP', value: `${myXp} XP`, inline: true }
+        { name: '🏆 Rang', value: `#${myRank}`, inline: true },
+        { name: '⭐ Level', value: `${myLevel}`, inline: true },
+        { name: '✨ XP Gesamt', value: `${myXp} XP`, inline: true },
+        { name: '💬 Messages', value: `${messages.toLocaleString('de-DE')}`, inline: true },
+        { name: '🎙️ Voice Time', value: `${voiceText}`, inline: true },
+        { name: '\u200b', value: '\u200b', inline: true },
+        { name: `📈 Fortschritt zu Level ${myLevel + 1}`, value: `${bar}\n\`${progressXp} / ${neededXp} XP\` • **${percent}%**\nNoch **${left} XP** bis Level ${myLevel + 1}`, inline: false }
       )
-      .setColor('#2b2d31')
+      .setFooter({ text: 'Beni Bot • Schreibe weiter um aufzusteigen!' })
       .setTimestamp();
 
     await message.channel.send({ embeds: [embed] });
+
   } catch (err) {
     console.log('RANK FEHLER:', err);
-    await message.channel.send('Rank-Fehler, check Console!');
+    await message.channel.send('Rank-Fehler, check Render Logs!');
   }
   return;
 }
