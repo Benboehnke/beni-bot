@@ -2284,19 +2284,19 @@ client.on('messageCreate', async (message) => {
   await reactDone(message);
   return embedReply(
     message,
-    `Rank - ${t.username}`,
+    'Rank - ${t.username}',
     '',
     0x5865F2,
     false,
     {
       thumb: t.displayAvatarURL(),
       fields: [
-        { name: '🏆 Level', value: `**${u.level}**`, inline: true },
-        { name: '✨ XP', value: `**${u.xp} / ${need}**`, inline: true },
-        { name: '📊 Fortschritt', value: `${bar} ${Math.floor((u.xp / need) * 100)}%`, inline: false },
-        { name: '🏅 Platz', value: `**#${pos}** von ${all.length}`, inline: true },
-        { name: '💬 Messages', value: `**${u.messages || 0}**`, inline: true },
-        { name: '🎙️ Voice-Time', value: `**${Math.floor((u.voiceTime || 0) / 3600)}h ${Math.floor(((u.voiceTime || 0) % 3600) / 60)}m**`, inline: true }
+        { name: '🏆 Level', value: '**' + u.level + '**', inline: true },
+        { name: '✨ XP', value: '**' + u.xp + ' / ' + need + '**', inline: true },
+        { name: '📊 Fortschritt', value: bar + ' ' + Math.floor((u.xp / need) * 100) + '%', inline: false },
+        { name: '🏅 Platz', value: '**#' + pos + '** von ' + all.length, inline: true },
+        { name: '💬 Messages', value: '**' + (u.messages || 0) + '**', inline: true },
+        { name: '🎙️ Voice-Time', value: '**' + Math.floor((u.voiceTime || 0) / 3600) + 'h ' + Math.floor(((u.voiceTime || 0) % 3600) / 60) + 'm**', inline: true }
       ]
     }
   );
