@@ -2270,50 +2270,39 @@ client.on('messageCreate', async (message) => {
   // ==========================================================================
   // LEVEL - !rank
   // ==========================================================================
- if (command === '!rank') {
-  const t = message.mentions.users.first() || (args[0] ? await getUserById(args[0]) : null) || message.author;
-  let u = await Level.findOne({ userId: t.id, guildId: message.guild.id });
-  if (!u) {
-    return fail(message, 'Der User hat noch keine XP!');
-  }
+if (command === 'rank') {
+  const target = message.mentions.users.first() || message.author;
+  const t = message.guild.members.cache.get(target.id) || await message.guild.members.fetch(target.id).catch(() => null);
+  const u = await getOrCreateLevel(target.id, message.guild.id);
   const need = getNeededXp(u.level);
-  const prog = Math.min(20, Math.max(0, Math.floor((u.xp / need) * 20)));
-  const bar = '#'.repeat(prog) + '-'.repeat(20 - prog);
   const all = await Level.find({ guildId: message.guild.id }).sort({ level: -1, xp: -1 });
-  const pos = all.findIndex(x => x.userId === t.id) + 1;
-  await reactDone(message);
-  return embedReply(
-    message,
-    'Rank - ${t.username}',
-    '',
-    0x5865F2,
+  let pos = all.findIndex(x => x.userId === target.id) + 1;
+  if (pos === 0) pos = 1;
+  const pct = Math.floor((u.xp / need) * 100);
+  const filled = Math.floor(pct / 10);
+  let bar = '';
+  for (let i = 0; i < 10; i++) {
+    if (i < filled) bar += '█';
+    else bar += '░';
+  }
+  await embedReply(message,
+    'Rank - ' + target.username,
+    'Dein aktueller Rank auf diesem Server',
+    0x00AAFF,
     false,
     {
-      thumb: t.displayAvatarURL(),
+      thumb: target.displayAvatarURL(),
       fields: [
         { name: '🏆 Level', value: '**' + u.level + '**', inline: true },
         { name: '✨ XP', value: '**' + u.xp + ' / ' + need + '**', inline: true },
-        { name: '📊 Fortschritt', value: bar + ' ' + Math.floor((u.xp / need) * 100) + '%', inline: false },
+        { name: '📊 Fortschritt', value: bar + ' ' + pct + '%', inline: false },
         { name: '🏅 Platz', value: '**#' + pos + '** von ' + all.length, inline: true },
         { name: '💬 Messages', value: '**' + (u.messages || 0) + '**', inline: true },
-        { name: '🎙️ Voice-Time', value: '**' + Math.floor((u.voiceTime || 0) / 3600) + 'h ' + Math.floor(((u.voiceTime || 0) % 3600) / 60) + 'm**', inline: true }
+        { name: '🎙️ Voice-Time', value: '**' + Math.floor((u.voiceTime || 0) / 3600000) + 'h ' + Math.floor(((u.voiceTime || 0) % 3600000) / 60000) + 'm**', inline: true }
       ]
     }
   );
 }
-        thumb: t.displayAvatarURL(),
-        fields: [
-          { name: '🏆 Rang', value: `#${pos}`, inline: true },
-          { name: '📈 Level', value: `${u.level}`, inline: true },
-          { name: '✨ XP', value: `${u.xp} / ${need}`, inline: true },
-          { name: '📊 Fortschritt', value: `${bar}\n${Math.floor((u.xp / need) * 100)}%`, inline: false },
-          { name: '💬 Messages', value: `${u.messages}`, inline: true },
-          { name: '🎙️ Voice-Time', value: formatVoice(u.voiceTime), inline: true },
-          { name: '✨ Total XP', value: `${u.totalXp}`, inline: true }
-        ]
-      }
-    );
-  }
 
   // ==========================================================================
   // LEVEL - !leaderboard / !lb
