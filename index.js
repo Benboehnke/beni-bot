@@ -2253,53 +2253,51 @@ if (command === '!id') {
   // ==========================================================================
   // LEVEL - !rank
   // ==========================================================================
-if (command === '!rank') {
-  const guildId = message.guild.id;
+if (message.content.toLowerCase().startsWith('!rank')) {
+  try {
+    // Deine Mongo-Collection holen - direkt über mongoose, ohne db-Variable
+    const collection = mongoose.connection.db.collection('levels');
+    
+    // Top 10 für diesen Server holen, nach XP sortiert
+    const guildData = await collection.find({ guildId: message.guild.id }).sort({ xp: -1 }).limit(10).toArray();
 
-  // Alle XP-Daten für diesen Server holen
-  const all = await db.all();
-  const guildData = all
-    .filter(d => d.ID.startsWith(`xp_${guildId}_`))
-    .map(d => {
-      const userId = d.ID.split('_')[2];
-      return { userId, xp: d.data };
-    })
-    .sort((a, b) => b.xp - a.xp);
+    let desc = '';
+    for (let i = 0; i < guildData.length; i++) {
+      const entry = guildData[i];
+      const member = await message.guild.members.fetch(entry.userId).catch(() => null);
+      const name = member ? member.user.username : 'Unbekannt';
+      const level = entry.level || Math.floor(Math.sqrt((entry.xp || 0) / 100)) + 1;
+      const msgs = entry.messages || entry.msgs || 0;
+      desc += `#${i + 1} ${name} - Level ${level} | ${entry.xp || 0} XP | ${msgs} Nachrichten\n`;
+    }
 
-  // Top 10 Leaderboard bauen
-  let desc = '';
-  for (let i = 0; i < Math.min(guildData.length, 10); i++) {
-    const entry = guildData[i];
-    const member = await message.guild.members.fetch(entry.userId).catch(() => null);
-    const name = member ? member.user.username : 'Unbekannt';
-    const level = Math.floor(Math.sqrt(entry.xp / 100)) + 1;
-    const msgs = await db.get(`msgs_${guildId}_${entry.userId}`).catch(() => 0) || 0;
+    if (!desc) desc = 'Noch keine XP auf diesem Server!';
 
-    desc += `#${i + 1} ${name} - Level ${level} | ${entry.xp} XP | ${msgs} Nachrichten\n`;
+    // Dein eigener Rang
+    const myData = await collection.findOne({ guildId: message.guild.id, userId: message.author.id });
+    const myXp = myData ? myData.xp : 0;
+    const myLevel = myData?.level || Math.floor(Math.sqrt(myXp / 100)) + 1;
+    
+    // Rang-Position zählen
+    const betterCount = await collection.countDocuments({ guildId: message.guild.id, xp: { $gt: myXp } });
+    const myRank = myData ? betterCount + 1 : 'Kein Rang';
+
+    const embed = new EmbedBuilder()
+      .setTitle('Beni Bot - Rangliste')
+      .setDescription(desc)
+      .addFields(
+        { name: 'Dein Rang', value: `#${myRank}`, inline: true },
+        { name: 'Dein Level', value: `${myLevel}`, inline: true },
+        { name: 'Deine XP', value: `${myXp} XP`, inline: true }
+      )
+      .setColor('#2b2d31')
+      .setTimestamp();
+
+    await message.channel.send({ embeds: [embed] });
+  } catch (err) {
+    console.log('RANK FEHLER:', err);
+    await message.channel.send('Rank-Fehler, check Console!');
   }
-
-  if (!desc) desc = 'Noch keine XP auf diesem Server!';
-
-  // Dein eigener Rang
-  const myData = guildData.find(d => d.userId === message.author.id);
-  const myXp = myData ? myData.xp : 0;
-  const myLevel = Math.floor(Math.sqrt(myXp / 100)) + 1;
-  const myRank = myData ? guildData.findIndex(d => d.userId === message.author.id) + 1 : 'Kein Rang';
-  const myMsgs = await db.get(`msgs_${guildId}_${message.author.id}`).catch(() => 0) || 0;
-
-  const embed = new EmbedBuilder()
-    .setTitle('Beni Bot - Rangliste')
-    .setDescription(desc)
-    .addFields(
-      { name: 'Dein Rang', value: `#${myRank}`, inline: true },
-      { name: 'Dein Level', value: `${myLevel}`, inline: true },
-      { name: 'Deine XP', value: `${myXp} XP`, inline: true },
-      { name: 'Deine Nachrichten', value: `${myMsgs}`, inline: true }
-    )
-    .setColor('#2b2d31')
-    .setTimestamp();
-
-  await message.channel.send({ embeds: [embed] });
   return;
 }
   // ==========================================================================
