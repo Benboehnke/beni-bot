@@ -1885,38 +1885,21 @@ client.on('messageCreate', async (message) => {
   // ==========================================================================
   // !id - UNSICHTBAR
   // ==========================================================================
-  if (command === '!id') {
-    let t = message.mentions.users.first();
-    if (!t && message.reference?.messageId) {
-      const ref = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
-      if (ref) t = ref.author;
-    }
-    if (!t) {
-      return fail(message, `Ey, wen denn? Markier mal jemanden oder antworte auf seine Nachricht! Beispiel: \`${prefix}id @Max\``);
-    }
-    await reactDone(message);
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`copy_id_${t.id}`)
-        .setLabel('📋 ID Kopieren')
-        .setStyle(ButtonStyle.Primary)
-    );
-    const r = await message.reply({
-      embeds: [new EmbedBuilder()
-        .setTitle(`ID von ${t.username}`)
-        .setDescription('Die ID ist versteckt, damit sie nicht jeder sieht.\nKlick unten auf den Button - nur du siehst sie dann!')
-        .setThumbnail(t.displayAvatarURL())
-        .setColor(0x5865F2)
-        .setFooter({ text: `Angefordert von ${message.author.tag}` })
-        .setTimestamp()
-      ],
-      components: [row]
-    });
-    deleteAfter(r, 15000);
-    deleteAfter(message);
-    return;
-  }
+if (command === 'id') {
+  // Deine !id Nachricht sofort löschen, damit keiner sieht dass du !id benutzt hast
+  await message.delete().catch(() => {});
 
+  const target = message.mentions.users.first() || message.author;
+
+  // ID nur per DM - im Channel steht GAR NIX mehr
+  try {
+    await message.author.send(`Hier zum Kopieren:\n\`${target.id}\``);
+  } catch {
+    const m = await message.channel.send(`${message.author}, mach deine DMs an, dann schick ich dir die ID privat!`);
+    setTimeout(() => m.delete().catch(() => {}), 5000);
+  }
+  return;
+}
   // ==========================================================================
   // !ban
   // ==========================================================================
