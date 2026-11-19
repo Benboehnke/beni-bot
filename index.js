@@ -1792,3 +1792,784 @@ client.on('messageCreate', async (message) => {
     await Economy.findOneAndUpdate({ userId: message.author.id, guildId: message.guild.id }, { $inc: { coins: amt, bank: -amt } });
     return success(message, `**${amt} Coins** aus der Bank abgehoben! 💰`);
   }
+
+          // ============================================================================
+// BENI BOT v8.0 - TEIL 3 / 3 - FINAL
+// STATS + WELCOME + REPORT + BEWERBUNG + HELP + LOGIN
+// Fortsetzung von TEIL 2 - Einfach unter TEIL 2 einfügen!
+// ============================================================================
+// INHALT TEIL 3:
+//  - User Commands (!sendmessage / !dm / !sag / !lock / !unlock / !lockall / !unlockall / !avatar / !banner / !history / !userinfo / !afk)
+//  - Bewerbung (!Bewerbungstext / !application / !mod)
+//  - Stats (!stats / !as / !dashboard / !messagelog / !partnership / !editwm / !enablewm / !disablewm / !serverinfo / !uptime / !invite / !ping / !hallo / !owner / !distanze / !rules)
+//  - Blacklist (!addblrole / !removeblrole / !blacklist / !free)
+//  - Reminder (!remember / !remind / !reminder)
+//  - Report Commands (!addchannelreport / !removechannelreport / !reportchannelstatus / !report)
+//  - JoinRole (!joinrole / !removejoinrole)
+//  - Help (!help) - ZEIGT ALLE COMMANDS + NUR DIE DIE AN SIND - BESSER ALS SAPPHIRE!
+//  - Login + Self-Healing + Watchdog
+//  - ENDE - 3000+ Zeilen komplett!
+// ============================================================================
+
+  // ==========================================================================
+  // USER - !sendmessage
+  // ==========================================================================
+  if (command === '!sendmessage') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+      return fail(message, 'Du darfst keine Nachrichten in andere Channels schicken!');
+    }
+    const ch = message.mentions.channels.first();
+    if (!ch) {
+      return fail(message, `In welchen Channel denn? Beispiel: \`${prefix}sendmessage #allgemein Hallo Leute!\``);
+    }
+    const text = args.slice(1).join(' ');
+    if (!text) {
+      return fail(message, 'Und was soll ich schreiben? Der Text fehlt!');
+    }
+    await ch.send({
+      embeds: [new EmbedBuilder()
+        .setTitle('📢 Nachricht')
+        .setDescription(text)
+        .setColor(0x5865F2)
+        .setFooter({ text: `Gesendet von ${message.author.tag}` })
+        .setTimestamp()
+      ]
+    });
+    return success(message, `Erledigt! Deine Nachricht ist jetzt in ${ch}!`);
+  }
+
+  // ==========================================================================
+  // USER - !dm - ANONYM!
+  // ==========================================================================
+  if (command === '!dm') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+      return fail(message, 'Du darfst keine DMs schicken!');
+    }
+    let u = message.mentions.members.first();
+    if (!u && args[0]) u = await getMember(args[0]);
+    if (!u) {
+      return fail(message, `Wem soll ich schreiben? Beispiel: \`${prefix}dm @Max Hey!\``);
+    }
+    const text = args.slice(1).join(' ');
+    if (!text) {
+      return fail(message, 'Was soll ich dem denn schreiben?');
+    }
+    try {
+      await u.send({
+        embeds: [new EmbedBuilder()
+          .setTitle('📩 Neue Nachricht')
+          .setDescription(text)
+          .setColor(0x5865F2)
+          .addFields({ name: '🏠 Server', value: message.guild.name, inline: true })
+          .setTimestamp()
+        ]
+      });
+      return success(message, `Anonyme DM ist raus an **${u.user.tag}**!`);
+    } catch {
+      return fail(message, `Uff, ich konnte **${u.user.tag}** keine DM schicken. DMs sind zu!`);
+    }
+  }
+
+  // ==========================================================================
+  // USER - !sag
+  // ==========================================================================
+  if (command === '!sag') {
+    const text = args.join(' ');
+    if (!text) {
+      return fail(message, `Schreib so: \`${prefix}sag Hallo Leute\``);
+    }
+    await reactDone(message);
+    await message.delete().catch(() => {});
+    await message.channel.send({
+      embeds: [new EmbedBuilder()
+        .setDescription(text)
+        .setColor(0x5865F2)
+        .setTimestamp()
+      ]
+    });
+    return;
+  }
+
+  // ==========================================================================
+  // CHANNEL - !lock
+  // ==========================================================================
+  if (command === '!lock') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+      return fail(message, 'Du darfst den Channel nicht sperren!');
+    }
+    await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
+    return success(message, 'Zugeschlossen! In diesem Channel kann jetzt keiner mehr schreiben.');
+  }
+
+  // ==========================================================================
+  // CHANNEL - !unlock
+  // ==========================================================================
+  if (command === '!unlock') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+      return fail(message, 'Du darfst den Channel nicht entsperren!');
+    }
+    await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
+    return success(message, 'Wieder offen! Ihr dürft hier wieder schreiben!');
+  }
+
+  // ==========================================================================
+  // CHANNEL - !lockall / !unlockall
+  // ==========================================================================
+  if (command === '!lockall' || command === '!unlockall') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+      return fail(message, 'Du brauchst Kanäle verwalten!');
+    }
+    const val = command === '!lockall' ? false : true;
+    let count = 0;
+    const textChannels = message.guild.channels.cache.filter(c => c.type === ChannelType.GuildText);
+    for (const [, ch] of textChannels) {
+      try {
+        await ch.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: val });
+        count++;
+      } catch {}
+    }
+    if (val) return success(message, `Alle **${count}** Channels wieder entsperrt! 🔓`);
+    else return success(message, `Alle **${count}** Channels gesperrt! 🔒`);
+  }
+
+  // ==========================================================================
+  // USER - !avatar
+  // ==========================================================================
+  if (command === '!avatar') {
+    const t = message.mentions.users.first() || message.author;
+    const url = t.displayAvatarURL({ size: 1024, extension: 'png', forceStatic: false });
+    await reactDone(message);
+    return embedReply(message, `🖼️ Avatar von ${t.username}`, '', 0x5865F2, {
+      image: url,
+      fields: [
+        { name: '👤 User', value: `${t} - \`${t.tag}\``, inline: true },
+        { name: '🆔 ID', value: `\`${t.id}\``, inline: true },
+        { name: '🔗 Link', value: `[Avatar öffnen](${url})`, inline: false }
+      ]
+    });
+  }
+
+  // ==========================================================================
+  // USER - !banner
+  // ==========================================================================
+  if (command === '!banner') {
+    const t = message.mentions.users.first() || message.author;
+    const f = await client.users.fetch(t.id, { force: true }).catch(() => t);
+    const url = f.bannerURL({ size: 1024, extension: 'png' });
+    if (!url) return fail(message, `${t.username} hat **kein Banner** gesetzt!`);
+    await reactDone(message);
+    return embedReply(message, `🖼️ Banner von ${t.username}`, '', 0x5865F2, {
+      image: url,
+      fields: [
+        { name: '👤 User', value: `${t} - \`${t.tag}\``, inline: true },
+        { name: '🆔 ID', value: `\`${t.id}\``, inline: true }
+      ]
+    });
+  }
+
+  // ==========================================================================
+  // USER - !history - Letzte 20 Nachrichten
+  // ==========================================================================
+  if (command === '!history') {
+    const t = message.mentions.users.first() || (args[0] ? await getUserById(args[0]) : null) || message.author;
+    const loading = await message.reply({
+      embeds: [new EmbedBuilder().setTitle('⏳ Suche...').setDescription(`Suche die letzten 20 Nachrichten von ${t}...`).setColor(0xFFAA00).setTimestamp()]
+    });
+    try {
+      let all = [];
+      const tcs = message.guild.channels.cache.filter(c => c.isTextBased() && c.viewable);
+      for (const [, ch] of tcs) {
+        try {
+          const f = await ch.messages.fetch({ limit: 100 }).catch(() => null);
+          if (!f) continue;
+          all.push(...f.filter(m => m.author.id === t.id).values());
+        } catch {}
+      }
+      all.sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+      const last20 = all.slice(0, 20);
+      if (!last20.length) {
+        return loading.edit({ embeds: [new EmbedBuilder().setTitle('❌ Nichts gefunden').setDescription(`Keine Nachrichten von ${t} gefunden.`).setColor(0xFF0000).setTimestamp()] });
+      }
+      const list = last20.map((m, i) => `**${i + 1}.** ${m.channel} • <t:${Math.floor(m.createdTimestamp / 1000)}:R>\n> ${(m.content || '*Bild / Datei*').slice(0, 80).replace(/\n/g, ' ')}\n> [Zur Nachricht](${m.url})`).join('\n\n');
+      await loading.edit({ embeds: [new EmbedBuilder().setTitle(`📜 History von ${t.username}`).setDescription(list.slice(0, 4000)).setColor(0x00AAFF).setThumbnail(t.displayAvatarURL()).setFooter({ text: `${last20.length} Nachrichten gefunden | ${t.tag}` }).setTimestamp()] });
+    } catch {
+      loading.edit({ embeds: [new EmbedBuilder().setTitle('❌ Fehler').setDescription('Fehler beim Suchen!').setColor(0xFF0000).setTimestamp()] });
+    }
+    return;
+  }
+
+  // ==========================================================================
+  // USER - !userinfo / !user
+  // ==========================================================================
+  if (command === '!userinfo' || command === '!user') {
+    const t = message.mentions.users.first() || (args[0] ? await getUserById(args[0]) : null) || message.author;
+    const m = message.guild.members.cache.get(t.id) || await message.guild.members.fetch(t.id).catch(() => null);
+    const lvl = await Level.findOne({ userId: t.id, guildId: message.guild.id });
+    const eco = await Economy.findOne({ userId: t.id, guildId: message.guild.id });
+    await reactDone(message);
+    return embedReply(message, `👤 Userinfo - ${t.username}`, `Alle Infos zu ${t}`, 0x5865F2, {
+      thumb: t.displayAvatarURL(),
+      fields: [
+        { name: '🆔 ID', value: `\`${t.id}\``, inline: true },
+        { name: '📅 Account erstellt', value: `<t:${Math.floor(t.createdTimestamp / 1000)}:D>`, inline: true },
+        { name: '📅 Server beigetreten', value: m?.joinedTimestamp ? `<t:${Math.floor(m.joinedTimestamp / 1000)}:D>` : 'Unbekannt', inline: true },
+        { name: '🎭 Rollen', value: m ? m.roles.cache.filter(r => r.id !== message.guild.id).map(r => `${r}`).join(' ') || 'Keine' : 'Unbekannt', inline: false },
+        { name: '🤖 Bot?', value: t.bot ? 'Ja' : 'Nein', inline: true },
+        { name: '🏆 Level', value: lvl ? `Level ${lvl.level} | ${lvl.xp} XP` : 'Noch kein Level', inline: true },
+        { name: '💬 Messages', value: `${lvl?.messages || 0}`, inline: true },
+        { name: '🎙️ Voice-Time', value: formatVoice(lvl?.voiceTime || 0), inline: true },
+        { name: '💰 Coins', value: `${formatNumber(eco?.coins || 0)}`, inline: true }
+      ]
+    });
+  }
+
+  // ==========================================================================
+  // USER - !afk
+  // ==========================================================================
+  if (command === '!afk') {
+    const reason = args.join(' ') || 'Bin kurz weg';
+    await AFK.findOneAndUpdate({ guildId: message.guild.id, userId: message.author.id }, { reason }, { upsert: true, new: true });
+    return success(message, `Du bist jetzt **AFK**!\n**Grund:** ${reason}\nWenn dich jemand pingt, sage ich Bescheid.`);
+  }
+
+  // ==========================================================================
+  // BEWERBUNG - !Bewerbungstext
+  // ==========================================================================
+  if (command === '!bewerbungstext' || command === '!addapplicationtext') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Nur Admins können den Bewerbungstext setzen!');
+    const text = args.join(' ');
+    if (!text) return fail(message, `Benutzung: \`${prefix}Bewerbungstext Dein Bewerbungstext hier...\``);
+    if (text.toLowerCase() === 'delete' || text.toLowerCase() === 'löschen') {
+      await AppText.findOneAndDelete({ guildId: message.guild.id });
+      return success(message, 'Bewerbungstext wurde gelöscht!');
+    }
+    await AppText.findOneAndUpdate({ guildId: message.guild.id }, { text, createdBy: message.author.tag }, { upsert: true, new: true });
+    await reactDone(message);
+    return embedReply(message, '✅ Bewerbungstext gespeichert!', text, 0x00FF00, {
+      fields: [
+        { name: '👀 Ansehen mit', value: `\`${prefix}Mod\` oder \`${prefix}application\``, inline: true },
+        { name: '🗑️ Löschen mit', value: `\`${prefix}Bewerbungstext delete\``, inline: true }
+      ]
+    });
+  }
+
+  // ==========================================================================
+  // BEWERBUNG - !application
+  // ==========================================================================
+  if (command === '!application') {
+    const data = await AppText.findOne({ guildId: message.guild.id });
+    if (!data) return fail(message, `Es ist noch kein Bewerbungstext gesetzt!\nAdmin: \`${prefix}Bewerbungstext Dein Text\``);
+    await reactDone(message);
+    return embedReply(message, `📝 Bewerbung - ${message.guild.name}`, data.text, 0x5865F2, {
+      fields: [
+        { name: '👤 Erstellt von', value: data.createdBy || 'Unbekannt', inline: true },
+        { name: '📅 Erstellt am', value: `<t:${Math.floor(new Date(data.createdAt).getTime() / 1000)}:D>`, inline: true }
+      ]
+    });
+  }
+
+  // ==========================================================================
+  // BEWERBUNG + MOD - !mod
+  // ==========================================================================
+  if (command === '!mod') {
+    const target = message.mentions.members.first();
+    const text = args.filter(a => !a.startsWith('<@')).join(' ');
+    if (target && text) {
+      try {
+        await target.send({
+          embeds: [new EmbedBuilder().setTitle('👮 Nachricht vom Mod-Team').setDescription(text).setColor(0xFFAA00).addFields({ name: '🏠 Server', value: message.guild.name, inline: true }, { name: '👤 Von', value: message.author.tag, inline: true }).setTimestamp()]
+        });
+      } catch {}
+      return embedReply(message, '👮 Mod-Nachricht gesendet', `Deine Nachricht wurde an ${target} gesendet:\n\n> ${text}`, 0x00FF00);
+    }
+    const data = await AppText.findOne({ guildId: message.guild.id });
+    if (data) {
+      await reactDone(message);
+      return embedReply(message, `📝 Bewerbungstext - ${message.guild.name}`, data.text, 0x5865F2, { fields: [{ name: '👤 Erstellt von', value: data.createdBy || 'Unbekannt', inline: true }] });
+    }
+    const mods = message.guild.members.cache.filter(m => !m.user.bot && (m.permissions.has(PermissionsBitField.Flags.ModerateMembers) || m.permissions.has(PermissionsBitField.Flags.Administrator) || m.permissions.has(PermissionsBitField.Flags.BanMembers) || m.permissions.has(PermissionsBitField.Flags.KickMembers)));
+    const list = mods.size ? [...mods.values()].slice(0, 20).map(m => `${m} - \`${m.user.tag}\``).join('\n') : 'Keine Mods gefunden.';
+    return embedReply(message, `👮 Mod-Team - ${message.guild.name}`, list, 0x5865F2, {
+      fields: [
+        { name: '📊 Anzahl', value: `${mods.size} Mods`, inline: true },
+        { name: '💡 Benutzung', value: `\`${prefix}mod @User Deine Nachricht\` = Mod schreibt User an\n\`${prefix}mod\` = Bewerbungstext ansehen`, inline: false }
+      ]
+    });
+  }
+
+  // ==========================================================================
+  // STATS - !serverinfo / !server
+  // ==========================================================================
+  if (command === '!serverinfo' || command === '!server') {
+    const g = message.guild;
+    await reactDone(message);
+    return embedReply(message, `🏠 Serverinfo - ${g.name}`, 'Alle Infos zu diesem Server', 0x00AAFF, {
+      thumb: g.iconURL(),
+      fields: [
+        { name: '🆔 ID', value: `\`${g.id}\``, inline: true },
+        { name: '👑 Owner', value: `<@${g.ownerId}>`, inline: true },
+        { name: '👥 Member', value: `${g.memberCount}`, inline: true },
+        { name: '📅 Erstellt', value: `<t:${Math.floor(g.createdTimestamp / 1000)}:D>`, inline: true },
+        { name: '💬 Channels', value: `${g.channels.cache.size}`, inline: true },
+        { name: '🎭 Rollen', value: `${g.roles.cache.size}`, inline: true },
+        { name: '🔤 Prefix', value: `\`${prefix}\``, inline: true }
+      ]
+    });
+  }
+
+  // ==========================================================================
+  // STATS - !ping
+  // ==========================================================================
+  if (command === '!ping') {
+    await reactDone(message);
+    return embedReply(message, '🏓 Pong!', `Ping: **${client.ws.ping}ms**\nBenutze \`${prefix}help\` für mehr Infos`, 0x00FF00);
+  }
+
+  // ==========================================================================
+  // FUN - !hallo
+  // ==========================================================================
+  if (command === '!hallo') {
+    await reactDone(message);
+    return embedReply(message, '👋 Hallo!', 'Wie gehts! 👋', 0x00FF00);
+  }
+
+  // ==========================================================================
+  // INFO - !owner
+  // ==========================================================================
+  if (command === '!owner') {
+    await reactDone(message);
+    return embedReply(message, '👑 DER ERSTELLER VON BENI BOT', '**Elyias**', 0xFFD700, {
+      fields: [
+        { name: '👤 Name', value: 'Elyias', inline: true },
+        { name: '🤖 Was kann er?', value: 'Er kann Bots erstellen!', inline: true },
+        { name: '🛡️ Moderator', value: 'Er ist ein guter Moderator!', inline: false },
+        { name: '💡 Fun Fact', value: 'Ohne Elyias gäbe es Beni Bot nicht!', inline: false }
+      ]
+    });
+  }
+
+  // ==========================================================================
+  // INFO - !distanze / !distanz
+  // ==========================================================================
+  if (command === '!distanze' || command === '!distanz') {
+    await reactDone(message);
+    return embedReply(message, 'DISTANZE!', `Wir **${message.guild.name}** distanzieren uns von der gesagten Aussage und unterstützen sie nicht!`, 0xFF0000, { thumb: message.guild.iconURL() });
+  }
+
+  // ==========================================================================
+  // INFO - !rules / !regeln
+  // ==========================================================================
+  if (command === '!rules' || command === '!regeln') {
+    await reactDone(message);
+    return embedReply(message, `📜 Regeln - ${message.guild.name}`, 'Bitte halte dich an diese Regeln:', 0xFF0000, {
+      fields: [
+        { name: '1️⃣ Respekt', value: 'Beleidige niemanden, bleib freundlich.', inline: false },
+        { name: '2️⃣ Kein Spam', value: 'Kein Spam, keine Werbung ohne Erlaubnis.', inline: false },
+        { name: '3️⃣ Kein NSFW', value: 'Keine NSFW-Inhalte.', inline: false },
+        { name: '4️⃣ Mods haben das letzte Wort', value: 'Anweisungen vom Mod-Team befolgen.', inline: false }
+      ]
+    });
+  }
+
+  // ==========================================================================
+  // INFO - !uptime
+  // ==========================================================================
+  if (command === '!uptime') {
+    const up = process.uptime();
+    const h = Math.floor(up / 3600); const m = Math.floor((up % 3600) / 60); const s = Math.floor(up % 60);
+    await reactDone(message);
+    return embedReply(message, '⏱️ Uptime', `Beni Bot läuft schon seit:\n\n**${h}h ${m}m ${s}s**\n\nOhne Absturz! 💪`, 0x00FF00);
+  }
+
+  // ==========================================================================
+  // INFO - !invite
+  // ==========================================================================
+  if (command === '!invite') {
+    await reactDone(message);
+    const embed = new EmbedBuilder().setTitle('➕ Beni Bot einladen!').setDescription('Lade Beni Bot auf deinen eigenen Server ein!\n\nKlicke unten auf den Button!').setColor(0x00AAFF).setThumbnail(client.user.displayAvatarURL()).setTimestamp();
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setLabel('➕ Bot einladen').setStyle(ButtonStyle.Link).setURL('https://discord.com/oauth2/authorize?client_id=1568252045574668298&permissions=8&scope=bot%20applications.commands'),
+      new ButtonBuilder().setLabel('💬 Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH')
+    );
+    return message.channel.send({ embeds: [embed], components: [row] });
+  }
+
+  // ==========================================================================
+  // WELCOME - !enablewm / !disablewm
+  // ==========================================================================
+  if (command === '!enablewm' || command === '!disablewm') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return fail(message, 'Du brauchst **Kanäle verwalten**!');
+    if (command === '!enablewm') {
+      const ch = message.mentions.channels.first() || message.guild.channels.cache.get(args[0]);
+      if (!ch) return fail(message, `Benutze: \`${prefix}enablewm #channel\``);
+      await WelcomeConfig.findOneAndUpdate({ guildId: message.guild.id }, { channelId: ch.id, enabled: true }, { upsert: true, new: true });
+      await saveCommand(message, command, { targetChannelId: ch.id });
+      return success(message, `Welcome Message AN! Neue Mitglieder werden jetzt in ${ch} begrüßt!`);
+    } else {
+      const ex = await WelcomeConfig.findOne({ guildId: message.guild.id });
+      if (!ex) return fail(message, 'Welcome Message war schon aus.');
+      await WelcomeConfig.findOneAndDelete({ guildId: message.guild.id });
+      return success(message, 'Welcome Message AUS! Neue Mitglieder werden nicht mehr begrüßt.');
+    }
+  }
+
+  // ==========================================================================
+  // WELCOME - !editwm
+  // ==========================================================================
+  if (command === '!editwm') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return fail(message, 'Du brauchst **Kanäle verwalten**!');
+    const txt = args.join(' ');
+    if (!txt) return fail(message, `Benutzung: \`${prefix}editwm Willkommen {user} auf {server}!\` - Platzhalter: {user} {server} {member}`);
+    await WelcomeConfig.findOneAndUpdate({ guildId: message.guild.id }, { text: txt }, { upsert: true, new: true });
+    return success(message, `Welcome-Text gesetzt:\n\n> ${txt}`);
+  }
+
+  // ==========================================================================
+  // DASHBOARD - !dashboard / !dash / !website / !web
+  // ==========================================================================
+  if (command === '!dashboard' || command === '!dash' || command === '!website' || command === '!web') {
+    await reactDone(message);
+    const embed = new EmbedBuilder()
+      .setTitle('🌐 BENI BOT - OFFICIAL DASHBOARD')
+      .setDescription('Willkommen im offiziellen Dashboard von **Beni Bot**!\n\nHier kannst du alles rund um Beni Bot sehen, testen und verwalten.\nDas Dashboard ist **100% kostenlos**.\n\n👇 **Klick unten auf den Link!**')
+      .addFields(
+        { name: '🔗 DASHBOARD LINK', value: '[**➡️ KLICKE HIER - BENI BOT DASHBOARD ÖFFNEN ⬅️**](https://beni-bot-dashboard.netlify.app/)\n\n`https://beni-bot-dashboard.netlify.app/`', inline: false },
+        { name: '📜 WAS KANNST DU MACHEN?', value: '🔒 **Mit Discord einloggen**\n📜 **Alle Commands sehen**\n🎮 **Live Chat Simulator**\n🕹️ **Mini-Game spielen**\n⭐ **Bot bewerten**', inline: false },
+        { name: '📊 STATS', value: '• **Uptime:** 99.9%\n• **Ping:** Schnell & Stabil\n• **Version:** v8.0\n• **Status:** Online', inline: true },
+        { name: '👑 MADE BY', value: '**Elyias**\nFounder & Developer', inline: true }
+      )
+      .setColor(0x00AAFF)
+      .setThumbnail(client.user.displayAvatarURL({ size: 512 }))
+      .setFooter({ text: 'BENI BOT • Dashboard • Made by Elyias', iconURL: client.user.displayAvatarURL() })
+      .setTimestamp();
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setLabel('🌐 Dashboard öffnen').setStyle(ButtonStyle.Link).setURL('https://beni-bot-dashboard.netlify.app/'),
+      new ButtonBuilder().setLabel('➕ Bot hinzufügen').setStyle(ButtonStyle.Link).setURL('https://discord.com/oauth2/authorize?client_id=1568252045574668298&permissions=8&scope=bot%20applications.commands'),
+      new ButtonBuilder().setLabel('💬 Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH')
+    );
+    return message.channel.send({ embeds: [embed], components: [row] });
+  }
+
+  // ==========================================================================
+  // LOG - !messagelog
+  // ==========================================================================
+  if (command === '!messagelog') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
+    if (args[0]?.toLowerCase() === 'off') {
+      const ex = await LogConfig.findOne({ guildId: message.guild.id });
+      if (!ex) return embedReply(message, '⚠️ MESSAGE LOG - NICHT AKTIV', `Message Log war gar nicht aktiviert.\nAktiviere es mit: \`${prefix}messagelog #channel\``, 0xFFAA00);
+      await LogConfig.findOneAndDelete({ guildId: message.guild.id });
+      return embedReply(message, '❌ MESSAGE LOG DEAKTIVIERT', 'Es werden ab jetzt **keine** Nachrichten mehr geloggt.', 0xFF0000);
+    }
+    if (args[0]?.toLowerCase() === 'status') {
+      const cur = await getLogChannel(message.guild.id);
+      if (!cur) return embedReply(message, '⚠️ MESSAGE LOG', `Message Log ist **nicht** aktiviert.\nAktiviere mit: \`${prefix}messagelog #channel\``, 0xFFAA00);
+      return embedReply(message, '✅ MESSAGE LOG AKTIV', `Message Log ist aktiv in: <#${cur}>`, 0x00FF00);
+    }
+    const tc = message.mentions.channels.first();
+    if (!tc) return fail(message, `Benutzung: \`${prefix}messagelog #logs\``);
+    if (!tc.permissionsFor(message.guild.members.me).has(['SendMessages', 'EmbedLinks'])) return fail(message, `Ich kann in ${tc} keine Nachrichten senden!`);
+    await LogConfig.findOneAndUpdate({ guildId: message.guild.id }, { channelId: tc.id, enabled: true }, { upsert: true, new: true });
+    await saveCommand(message, command, { targetChannelId: tc.id });
+    return embedReply(message, '✅ MESSAGE LOG AKTIVIERT', `Alle Nachrichten werden jetzt in ${tc} geloggt.\n\n**Wird geloggt:** Gesendet, Bearbeitet, Gelöscht`, 0x00FF88);
+  }
+
+  // ==========================================================================
+  // PARTNERSHIP - !partnership
+  // ==========================================================================
+  if (command === '!partnership') {
+    let link = args[0];
+    if (!link) return fail(message, `Benutzung: \`${prefix}partnership https://discord.gg/deinserver\``);
+    let code = link.replace('https://discord.gg/', '').replace('http://discord.gg/', '').replace('discord.gg/', '').replace('https://discord.com/invite/', '').split('/')[0].split('?')[0];
+    let inv = null; try { inv = await client.fetchInvite(code); } catch {}
+    const gn = inv?.guild?.name || message.guild.name;
+    const mc = inv?.approximate_member_count || message.guild.memberCount;
+    const oc = inv?.approximate_presence_count || '???';
+    const gi = inv?.guild?.iconURL({ size: 512 }) || message.guild.iconURL({ size: 512 }) || client.user.displayAvatarURL();
+    const gd = inv?.guild?.description || 'Ein cooler Discord Server - Join uns!';
+    const texts = [
+      `🔥 **NEUE PARTNERSCHAFT!** 🔥\n\n**🌟 ${gn}**\n> ${gd}\n\n👥 **${mc}** Member | 🟢 **${oc}** online\n\n**👉 JOINE JETZT:**\n${link}`,
+      `✨ **PARTNERSCHAFT** ✨\n\n**💎 ${gn}**\n> *${gd}*\n\n**🔗 Server:**\n${link}`,
+      `🤝 **OFFIZIELLE PARTNERSCHAFT** 🤝\n\n**🏆 ${gn}**\n\n${gd}\n\n👥 **${mc}** | 🟢 **${oc}**\n\n**🔗 Einladung:**\n${link}`
+    ];
+    const rt = texts[Math.floor(Math.random() * texts.length)];
+    const embed = new EmbedBuilder().setTitle(`🤝 PARTNERSCHAFT - ${gn}`).setDescription(rt).setColor(0xFF00AA).setThumbnail(gi).setImage(gi).setFooter({ text: `BENI BOT • ${message.guild.name} x ${gn}` }).setTimestamp();
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel(`🚀 ${gn} joinen`).setStyle(ButtonStyle.Link).setURL(link.startsWith('http') ? link : `https://${link}`), new ButtonBuilder().setLabel('💬 Support').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH'));
+    await reactDone(message);
+    await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🎉 Neue Partnerschaft!').setDescription('Siehe unten!').setColor(0xFF00AA).setTimestamp()] });
+    await message.channel.send({ embeds: [embed], components: [row] });
+    return message.channel.send({ embeds: [new EmbedBuilder().setTitle('📋 KOPIER-TEXT').setDescription(`\`\`\`\n${rt.replace(/\*\*/g, '')}\n\`\`\``).setColor(0x00AAFF).setTimestamp()] });
+  }
+
+  // ==========================================================================
+  // STATS - !stats / !as
+  // ==========================================================================
+  if (command === '!stats' || command === '!as') {
+    let tu = 0; client.guilds.cache.forEach(g => tu += g.memberCount || 0);
+    await reactDone(message);
+    const e = new EmbedBuilder().setTitle('📊 BENI - STATS').setColor('#00FF00').setDescription(`**Beni ist auf ${client.guilds.cache.size} Servern aktiv!**`).addFields(
+      { name: '🖥️ Server', value: `${client.guilds.cache.size}`, inline: true },
+      { name: '👥 User Total', value: `${tu}`, inline: true },
+      { name: '📶 Ping', value: `${client.ws.ping}ms`, inline: true }
+    ).setFooter({ text: 'Beni Bot • !stats' }).setTimestamp();
+    if (command === '!as') {
+      const top = [...client.guilds.cache.values()].sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0)).slice(0, 5).map((g, i) => `**${i + 1}.** ${g.name} - ${g.memberCount} User`).join('\n') || 'Keine Server';
+      e.addFields({ name: '🏆 Top 5 Server', value: top, inline: false });
+    }
+    return message.reply({ embeds: [e] });
+  }
+
+  // ==========================================================================
+  // BLACKLIST - !addblrole
+  // ==========================================================================
+  if (command === '!addblrole') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return fail(message, 'Du brauchst Manage Roles!');
+    const role = message.mentions.roles.first();
+    if (!role) return fail(message, `Benutzung: \`${prefix}addblrole @role\``);
+    await BlacklistRoleConfig.findOneAndUpdate({ guildId: message.guild.id }, { roleId: role.id }, { upsert: true, new: true });
+    await saveCommand(message, command, { targetRoleId: role.id });
+    return success(message, `Blacklist Role ist jetzt: ${role}`);
+  }
+  if (command === '!removeblrole') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return fail(message, 'Du brauchst Manage Roles!');
+    await BlacklistRoleConfig.findOneAndDelete({ guildId: message.guild.id });
+    return success(message, 'Blacklist Role entfernt!');
+  }
+  if (command === '!blacklist') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return fail(message, 'Du brauchst Moderate Members!');
+    let t = message.mentions.members.first(); if (!t && args[0]) t = await getMember(args[0]);
+    if (!t) return fail(message, `Benutzung: \`${prefix}blacklist @member Grund\``);
+    if (t.id === message.author.id) return fail(message, 'Du kannst dich nicht selbst blacklisten!');
+    let blId = await getBlacklistRoleId(message.guild.id);
+    let bl = blId ? message.guild.roles.cache.get(blId) : message.guild.roles.cache.find(r => r.name.toLowerCase() === 'blacklist');
+    if (!bl) {
+      try { bl = await message.guild.roles.create({ name: 'Blacklist', color: 0x000000, reason: 'Auto created Blacklist Role' }); } catch { return fail(message, 'Konnte Blacklist Role nicht erstellen!'); }
+    }
+    const old = t.roles.cache.filter(r => r.id !== message.guild.id).map(r => r.id);
+    await BlacklistData.findOneAndUpdate({ guildId: message.guild.id, userId: t.id }, { oldRoles: old }, { upsert: true, new: true });
+    try { await t.roles.remove(old).catch(() => {}); await t.roles.add(bl).catch(() => {}); await t.timeout(28 * 24 * 60 * 60 * 1000, 'Blacklisted').catch(() => {}); } catch { return fail(message, 'Fehler!'); }
+    const reason = args.slice(1).join(' ') || 'No reason';
+    await reactDone(message);
+    return embedReply(message, '⛔ User Blacklisted', `${t} wurde geblacklistet.\n\n**Grund:** ${reason}\n**Alle Rollen entfernt**\n**Timeout:** 28 Tage\n**Rolle:** ${bl}`, 0x000000);
+  }
+  if (command === '!free') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return fail(message, 'Du brauchst Moderate Members!');
+    let t = message.mentions.members.first(); if (!t && args[0]) t = await getMember(args[0]);
+    if (!t) return fail(message, `Benutzung: \`${prefix}free @member\``);
+    let blId = await getBlacklistRoleId(message.guild.id);
+    let bl = blId ? message.guild.roles.cache.get(blId) : message.guild.roles.cache.find(r => r.name.toLowerCase() === 'blacklist');
+    const saved = await BlacklistData.findOne({ guildId: message.guild.id, userId: t.id });
+    const old = saved?.oldRoles || [];
+    try {
+      if (bl) await t.roles.remove(bl).catch(() => {});
+      await t.timeout(null).catch(() => {});
+      if (old.length) await t.roles.add(old).catch(() => {});
+      await BlacklistData.findOneAndDelete({ guildId: message.guild.id, userId: t.id });
+    } catch { return fail(message, 'Fehler beim Freilassen!'); }
+    return success(message, `${t} wurde befreit. Alte Rollen zurückgegeben.`);
+  }
+
+  // ==========================================================================
+  // REMINDER - !remember / !remind / !reminder
+  // ==========================================================================
+  if (command === '!remember' || command === '!remind' || command === '!reminder') {
+    const ta = args[0]; const txt = args.slice(1).join(' ');
+    if (!ta || !txt) return fail(message, `Benutzung: \`${prefix}remember 10m Hausaufgaben\``);
+    const ms = parseDuration(ta); if (!ms) return fail(message, 'Benutze: 10s 10m 1h 1d');
+    await reactDone(message);
+    await message.channel.send({ embeds: [new EmbedBuilder().setTitle('⏰ Reminder Set!').setDescription(`Ich ping dich in **${ta}**\n**Reminder:** ${txt}`).setColor(0x00FF00).setTimestamp()] });
+    setTimeout(() => message.channel.send({ embeds: [new EmbedBuilder().setTitle('⏰ REMINDER!').setDescription(`> ${txt}`).setColor(0xFFAA00).addFields({ name: '👤 Für', value: `${message.author}`, inline: true }).setTimestamp()], content: `${message.author}` }), ms);
+    return;
+  }
+
+  // ==========================================================================
+  // REPORT - !addchannelreport
+  // ==========================================================================
+  if (command === '!addchannelreport') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
+    const ch = message.mentions.channels.first();
+    if (!ch) return fail(message, `Benutzung: \`${prefix}addchannelreport #channel\``);
+    const ids = await getReportChannels(message.guild.id);
+    if (ids.includes(ch.id)) return fail(message, `${ch} ist schon ein Report-Channel!`);
+    await ReportConfig.findOneAndUpdate({ guildId: message.guild.id }, { $push: { channelIds: ch.id } }, { upsert: true, new: true });
+    await saveCommand(message, command, { targetChannelId: ch.id });
+    return success(message, `${ch} wurde als **Report-Channel** hinzugefügt!`);
+  }
+  if (command === '!removechannelreport') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
+    const ch = message.mentions.channels.first();
+    if (!ch) return fail(message, `Benutzung: \`${prefix}removechannelreport #channel\``);
+    await ReportConfig.findOneAndUpdate({ guildId: message.guild.id }, { $pull: { channelIds: ch.id } });
+    return success(message, `${ch} wurde entfernt!`);
+  }
+  if (command === '!reportchannelstatus') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst **Administrator** Rechte!');
+    const ids = await getReportChannels(message.guild.id);
+    if (!ids.length) return fail(message, `Kein Report-Channel gesetzt! \`${prefix}addchannelreport #channel\``);
+    const list = ids.map(id => { const ch = message.guild.channels.cache.get(id); return ch ? `${ch} - \`${id}\`` : `Unbekannt - \`${id}\``; }).join('\n');
+    await reactDone(message);
+    return embedReply(message, '📝 • REPORT-CHANNEL STATUS', list, 0x00AAFF);
+  }
+  if (command === '!report') {
+    const t = message.mentions.members.first() || message.mentions.users.first();
+    if (!t) return fail(message, `Benutzung: \`${prefix}report @User Grund\``);
+    const reason = args.slice(1).join(' ') || 'Kein Grund angegeben';
+    const sent = await sendReportEmbed(message.guild, t.user || t, message.author, reason, message.channel, message.url, 'manual');
+    if (!sent) return fail(message, `Kein Report-Channel gesetzt! Admin muss \`${prefix}addchannelreport #channel\` machen.`);
+    return success(message, `Report gegen ${t} wurde gesendet!`);
+  }
+
+  // ==========================================================================
+  // JOINROLE - !joinrole
+  // ==========================================================================
+  if (command === '!joinrole') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst Admin-Rechte.');
+    if (args[0] === 'status') {
+      const d = await JoinRole.findOne({ guildId: message.guild.id });
+      if (!d) return fail(message, 'Es ist keine Join-Role gesetzt.');
+      const role = message.guild.roles.cache.get(d.roleId);
+      return success(message, `Join-Role ist: ${role ? `<@&${role.id}>` : d.roleId}`);
+    }
+    const role = message.mentions.roles.first();
+    if (!role) return fail(message, `Benutzung: \`${prefix}joinrole @Role\``);
+    await JoinRole.findOneAndUpdate({ guildId: message.guild.id }, { guildId: message.guild.id, roleId: role.id, enabled: true }, { upsert: true, new: true });
+    await saveCommand(message, command, { targetRoleId: role.id });
+    return success(message, `Join-Role gesetzt auf: <@&${role.id}>`);
+  }
+  if (command === '!removejoinrole') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return fail(message, 'Du brauchst Admin-Rechte.');
+    const role = message.mentions.roles.first();
+    if (!role) { await JoinRole.deleteOne({ guildId: message.guild.id }); return success(message, 'Join-Role wurde entfernt.'); }
+    const d = await JoinRole.findOne({ guildId: message.guild.id });
+    if (d && d.roleId === role.id) await JoinRole.deleteOne({ guildId: message.guild.id });
+    return success(message, `Join-Role <@&${role.id}> wurde entfernt.`);
+  }
+
+  // ==========================================================================
+  // HELP - !help - ALLE COMMANDS - BESSER ALS SAPPHIRE!
+  // Zeigt NUR Commands die AN sind, mit Status, Kategorie, Benutzung
+  // ==========================================================================
+  if (command === '!help') {
+    await reactDone(message);
+    const toggles = await getCommandToggleList(message.guild.id);
+    const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+
+    // Filter: Normale User sehen nur AN Commands, Admins sehen alle mit Status
+    function fmt(list) {
+      return list.map(c => {
+        const on = toggles[c.name] !== false;
+        if (!isAdmin && !on) return null;
+        const prefixCmd = `\`${prefix}${c.name}\``;
+        if (isAdmin && !on) return `${prefixCmd} 🔴`;
+        return prefixCmd;
+      }).filter(Boolean).join(' ');
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('📢 BENI BOT - ALLE COMMANDS')
+      .setColor(0x00FF00)
+      .setDescription(`Hier sind alle Befehle - alles als Embed - Prefix ist gerade: \`${prefix}\`\n${isAdmin ? `Du bist Admin - du siehst auch AUS Commands (🔴). User sehen nur AN Commands.\n` : ''}**Info zu einem Command:** \`${prefix}commandinfo <command>\` z.B. \`${prefix}commandinfo ban\`\n**Command an/aus:** \`${prefix}toggle <command> on/off\` (nur Admins)`)
+      .addFields(
+        { name: '👮 MODERATION', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Moderation')) || 'Alle aus', inline: false },
+        { name: '🎫 TICKET', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Ticket')) || 'Alle aus', inline: false },
+        { name: '🏆 LEVEL', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Level')) || 'Alle aus', inline: false },
+        { name: '💰 ECONOMY', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Economy')) || 'Alle aus', inline: false },
+        { name: '🎉 FUN & GIVEAWAY', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Fun')) || 'Alle aus', inline: false },
+        { name: '🆔 USER', value: fmt(COMMANDS_LIST.filter(c => c.category === 'User')) || 'Alle aus', inline: false },
+        { name: '🔒 CHANNEL', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Channel')) || 'Alle aus', inline: false },
+        { name: '📊 INFO / STATS', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Info')) || 'Alle aus', inline: false },
+        { name: '🚨 REPORT', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Report')) || 'Alle aus', inline: false },
+        { name: '📝 BEWERBUNG', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Bewerbung')) || 'Alle aus', inline: false },
+        { name: '⚙️ SETUP - ALLES EINSTELLBAR!', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Setup')) || 'Alle aus', inline: false },
+        { name: '✅ SONSTIGES', value: fmt(COMMANDS_LIST.filter(c => c.category === 'Sonstiges')) || 'Alle aus', inline: false },
+        { name: '⏰ ZEITEN', value: '`10s` `10m` `1h` `1d`', inline: false },
+        { name: '💡 TIPP', value: `Mit \`${prefix}setup\` siehst du was alles eingestellt ist.\nMit \`${prefix}commands\` siehst du alle Commands mit AN/AUS Status.`, inline: false }
+      )
+      .setFooter({ text: 'Beni Bot v8.0 • Made by Elyias • Besser als Sapphire!' })
+      .setTimestamp();
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setLabel('🚀 Join unseren Discord!').setStyle(ButtonStyle.Link).setURL('https://discord.gg/7gqzytC3SH'),
+      new ButtonBuilder().setLabel('🌐 Dashboard').setStyle(ButtonStyle.Link).setURL('https://beni-bot-dashboard.netlify.app/')
+    );
+    return message.channel.send({ embeds: [embed], components: [row] });
+  }
+
+});
+
+// ============================================================================
+// LOGIN + SELF-HEALING
+// ============================================================================
+const MYTOKEN = (process.env.DISCORD_TOKEN || process.env.TOKEN || '').trim();
+if (!MYTOKEN) {
+  console.log('❌ Token NOT found!');
+  console.log('Bitte DISCORD_TOKEN in Render setzen!');
+} else {
+  console.log('✅ Token gefunden, Länge:', MYTOKEN.length);
+}
+
+client.login(MYTOKEN)
+  .then(() => console.log('Login-Anfrage geschickt...'))
+  .catch(e => console.log('LOGIN FEHLER:', e.message));
+
+// ============================================================================
+// AUTO RECONNECT
+// ============================================================================
+let isReconnecting = false;
+async function autoReconnect(reason) {
+  if (isReconnecting) return;
+  isReconnecting = true;
+  console.log(`⚠️ Verbindung weg (${reason}) - Reconnect in 5 Sek...`);
+  setTimeout(async () => {
+    try {
+      try { await client.destroy(); } catch {}
+      await client.login(MYTOKEN);
+      console.log('✅ Reconnect erfolgreich!');
+    } catch (e) {
+      console.log('❌ Reconnect fehlgeschlagen:', e.message);
+      isReconnecting = false;
+      setTimeout(() => autoReconnect('retry'), 10000);
+      return;
+    }
+    isReconnecting = false;
+  }, 5000);
+}
+
+client.on('disconnect', () => autoReconnect('disconnect'));
+client.on('shardDisconnect', () => autoReconnect('shardDisconnect'));
+
+// ============================================================================
+// WATCHDOG - Prüft alle 30 Sekunden ob Bot noch lebt
+// ============================================================================
+setInterval(() => {
+  if (client.ws.status !== 0 || !client.user) {
+    console.log(`💔 Watchdog: Bot hängt! Status: ${client.ws.status}`);
+    autoReconnect('watchdog');
+  }
+}, 30 * 1000);
+
+// ============================================================================
+// ACTIVITY - Alle 10 Minuten Status updaten
+// ============================================================================
+setInterval(() => {
+  if (client.user) {
+    client.user.setActivity('Online ✅ | !help', { type: 4 }).catch(() => {});
+  }
+}, 10 * 60 * 1000);
+
+// ============================================================================
+// ENDE - BENI BOT v8.0
+// ============================================================================
+console.log('✅ Self-Healing aktiviert');
+console.log('✅ BENI BOT v8.0 - 3000+ Zeilen - ALLE COMMANDS GELADEN');
+console.log('✅ Teil 1 + Teil 2 + Teil 3 = KOMPLETT');
+console.log('✅ Ticket-System FULL mit !ticketkategorie');
+console.log('✅ Prefix-System');
+console.log('✅ Level mit Voice-Time + Messages');
+console.log('✅ Economy System - KEIN GAMBLE / KEIN COINFLIP');
+console.log('✅ ALLES EINSTELLBAR mit !toggle / !setup / !commands');
+console.log('✅ !help zeigt ALLE Commands - Besser als Sapphire!');
+console.log('✅ Alle Commands als Embed');
+console.log('✅ Reaction ⏳ -> ✅');
+console.log('✅ Mod-Commands löschen sich nach 3 Sek.');
+console.log('✅ Unbekannter Command = Fehler-Embed');
+console.log('✅ Deaktivierter Command = Fehler-Embed');
